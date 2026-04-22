@@ -1,0 +1,515 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Testing And Debugging - Compact Book</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="A structured, example-driven guide for understanding Compact">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-bfb21acb.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-525967f2.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Compact Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="testing-and-debugging"><a class="header" href="#testing-and-debugging">Testing and Debugging</a></h1>
+<p>This note covers how to work with Compact’s error system, understand what went wrong, fix it, and manage versions across the toolchain.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#static-and-dynamic-errors">Static and Dynamic Errors</a> · <a href="https://docs.midnight.network/troubleshoot/faq">FAQ</a> · <a href="https://docs.midnight.network/how-to/fix-version-mismatches">Version Mismatches</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact">14.01 Static Errors</a></p>
+</blockquote>
+<hr>
+<h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
+<p>Compact has two error layers, not one:</p>
+<ul>
+<li><strong>Static errors</strong>, caught by the compiler before generating any output. You see these in your terminal while developing.</li>
+<li><strong>Dynamic errors</strong>, caught at runtime by the generated JavaScript. You see these when a circuit executes.</li>
+</ul>
+<p>Static errors are your friend. The compiler tells you exactly what’s wrong and where. Dynamic errors require more detective work, the error happens inside generated code you didn’t write.</p>
+<p>The other half of debugging is version management. Midnight has six components that must stay in sync. When they’re not, you get opaque runtime errors about version mismatches.</p>
+<hr>
+<h2 id="two-error-types"><a class="header" href="#two-error-types">Two Error Types</a></h2>
+<h3 id="static-errors-compile-time"><a class="header" href="#static-errors-compile-time">Static Errors (Compile Time)</a></h3>
+<p>The compiler detects these before generating any output. It prints descriptive messages and terminates without producing target files.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Error type</th><th>What it is</th><th>When caught</th></tr>
+</thead>
+<tbody>
+<tr><td>Syntax</td><td>Malformed code</td><td>Parser</td></tr>
+<tr><td>Type mismatch</td><td>Wrong type used</td><td>Type checker</td></tr>
+<tr><td>Undeclared disclosure</td><td><code>disclose()</code> missing</td><td>Witness protection</td></tr>
+<tr><td>Undefined reference</td><td>Unknown identifier</td><td>Name resolver</td></tr>
+<tr><td>Generic not specialized</td><td>Generic entity used at top level</td><td>Scope checker</td></tr>
+<tr><td>Recursive struct</td><td>Struct that refers to itself</td><td>Declaration checker</td></tr>
+<tr><td>Recursive circuit</td><td>Circuit calls itself</td><td>Declaration checker</td></tr>
+<tr><td><code>return</code> in <code>for</code></td><td><code>return</code> inside loop</td><td>Statement checker</td></tr>
+<tr><td>Sealed ledger write</td><td>Write to sealed field in circuit</td><td>Declaration checker</td></tr>
+</tbody>
+</table>
+</div>
+<p>If the compiler produces no output, there’s at least one static error. Check the messages.</p>
+<h3 id="dynamic-errors-runtime"><a class="header" href="#dynamic-errors-runtime">Dynamic Errors (Runtime)</a></h3>
+<p>These are detected by the generated JavaScript and runtime libraries when the circuit executes. They halt the current evaluation.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Error type</th><th>What it is</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td>Type mismatch</td><td>Wrong argument type/number</td><td>Calling with wrong args</td></tr>
+<tr><td>Overflow</td><td>Cast value too large for target</td><td><code>1000 as Uint&lt;8&gt;</code></td></tr>
+<tr><td>Underflow</td><td>Counter decremented below zero</td><td><code>counter -= 1</code> when at 0</td></tr>
+<tr><td>Uninitialized nested value</td><td>Nested ledger state not initialized</td><td><code>map.lookup(k).lookup(k2)</code> before insert</td></tr>
+<tr><td>Merkle tree full</td><td>Insert into full tree</td><td><code>tree.insert()</code> when <code>isFull()</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Dynamic errors are harder to debug because they happen inside generated code. Read the error message for the line number in your source file.</p>
+<hr>
+<h2 id="reading-compiler-error-messages"><a class="header" href="#reading-compiler-error-messages">Reading Compiler Error Messages</a></h2>
+<h3 id="type-error"><a class="header" href="#type-error">Type Error</a></h3>
+<pre><code>/path/contract.compact line 12 char 5:
+  type error: expected Uint&lt;64&gt;, got Field
+</code></pre>
+<p>Read: <strong>line:character, expected type, got type</strong>. The caret (<code>^</code>) points to the problem token.</p>
+<h3 id="undeclared-disclosure"><a class="header" href="#undeclared-disclosure">Undeclared Disclosure</a></h3>
+<pre><code>Exception: /path/contract.compact line 6 char 11:
+  potential witness-value disclosure must be declared but is not:
+    witness value potentially disclosed:
+      the return value of witness getBalance at line 2 char 1
+    nature of the disclosure:
+      ledger operation might disclose the witness value
+    via this path through the program:
+      the right-hand side of = at line 6 char 11
+</code></pre>
+<p>Read this <strong>bottom to top</strong>. The path traces how witness data traveled:</p>
+<ol>
+<li><strong>Origin:</strong> <code>getBalance()</code> at line 2</li>
+<li><strong>Path:</strong> flows through the right-hand side of the assignment</li>
+<li><strong>Destination:</strong> the ledger operation at line 6</li>
+</ol>
+<p><strong>Fix:</strong> Add <code>disclose()</code> somewhere along that path, as close to the disclosure point as possible.</p>
+<h3 id="missing-disclose-on-return"><a class="header" href="#missing-disclose-on-return">Missing <code>disclose()</code> on Return</a></h3>
+<pre><code>Exception: line 5 char 3:
+  potential witness-value disclosure must be declared but is not:
+    witness value potentially disclosed:
+      the return value of witness getBalance at line 2 char 1
+    nature of the disclosure:
+      the value returned from exported circuit check might disclose
+      the result of a comparison involving the witness value
+</code></pre>
+<p>Even a <code>Boolean</code> comparison result counts as disclosure. Wrap the witness call or the return value with <code>disclose()</code>.</p>
+<h3 id="version-mismatch"><a class="header" href="#version-mismatch">Version Mismatch</a></h3>
+<pre><code>Error: runtime version mismatch: expected 0.15.0, got 0.14.2
+</code></pre>
+<p>The compiled contract expects a different runtime version. See version management below.</p>
+<hr>
+<h2 id="the---skip-zk-development-loop"><a class="header" href="#the---skip-zk-development-loop">The <code>--skip-zk</code> Development Loop</a></h2>
+<p>Generating proving keys is slow. During iterative development, skip it:</p>
+<pre><code class="language-bash">compact compile --skip-zk src/contract.compact obj/contract
+</code></pre>
+<p>This produces <code>contract/index.js</code> and <code>compiler/contract-info.json</code>, enough to test logic. Re-enable for final builds.</p>
+<hr>
+<h2 id="common-mistakes-and-fixes"><a class="header" href="#common-mistakes-and-fixes">Common Mistakes and Fixes</a></h2>
+<h3 id="forgot-disclose-on-ledger-write"><a class="header" href="#forgot-disclose-on-ledger-write">Forgot <code>disclose()</code> on Ledger Write</a></h3>
+<pre><code class="language-compact">// wrong, compiler error
+balance = getBalance();
+
+// correct
+balance = disclose(getBalance());
+</code></pre>
+<h3 id="forgot-disclose-on-return-value"><a class="header" href="#forgot-disclose-on-return-value">Forgot <code>disclose()</code> on Return Value</a></h3>
+<pre><code class="language-compact">// wrong, compiler error (comparison of witness data)
+export circuit check(n: Uint&lt;64&gt;): Boolean {
+  return getSecret() &gt; n;
+}
+
+// correct, declare the disclosure
+export circuit check(n: Uint&lt;64&gt;): Boolean {
+  return disclose(getSecret()) &gt; n;
+}
+</code></pre>
+<h3 id="return-inside-for-loop"><a class="header" href="#return-inside-for-loop"><code>return</code> Inside <code>for</code> Loop</a></h3>
+<pre><code class="language-compact">// wrong, static error
+circuit findFirst(v: Vector&lt;4, Field&gt;, target: Field): Boolean {
+  for (const x of v) {
+    if (x == target) return true;
+  }
+  return false;
+}
+
+// correct, use fold
+circuit findFirst(v: Vector&lt;4, Field&gt;, target: Field): Boolean {
+  return fold((found, x) =&gt; found || x == target, false, v);
+}
+</code></pre>
+<h3 id="recursive-circuit"><a class="header" href="#recursive-circuit">Recursive Circuit</a></h3>
+<pre><code class="language-compact">// wrong, static error: recursion not allowed
+circuit factorial(n: Uint&lt;64&gt;): Uint&lt;64&gt; {
+  return n == 0 ? 1 : n * factorial(n - 1);
+}
+</code></pre>
+<p>Rewrite using <code>fold</code> or explicit unrolling. Compact requires finite circuits.</p>
+<h3 id="narrowing-cast-overflows-at-runtime"><a class="header" href="#narrowing-cast-overflows-at-runtime">Narrowing Cast Overflows at Runtime</a></h3>
+<pre><code class="language-compact">const x: Uint&lt;64&gt; = 1000;
+const y = x as Uint&lt;8&gt;;  // dynamic error: 1000 doesn't fit
+</code></pre>
+<p>Always verify the value fits before casting. Use <code>assert</code> or bounded types.</p>
+<h3 id="uninitialized-nested-ledger-state"><a class="header" href="#uninitialized-nested-ledger-state">Uninitialized Nested Ledger State</a></h3>
+<pre><code class="language-compact">ledger fld: Map&lt;Boolean, Map&lt;Field, Counter&gt;&gt;;
+
+// wrong, dynamic error (inner map not initialized)
+export circuit increment(b: Boolean, n: Field): [] {
+  fld.lookup(b).lookup(n) += 1;
+}
+
+// correct, initialize first
+export circuit init(b: Boolean): [] {
+  fld.insert(disclose(b), default&lt;Map&lt;Field, Counter&gt;&gt;);
+}
+</code></pre>
+<h3 id="transienthash-result-used-without-disclose"><a class="header" href="#transienthash-result-used-without-disclose"><code>transientHash</code> Result Used Without <code>disclose()</code></a></h3>
+<pre><code class="language-compact">// wrong, compiler error (witness-tainted)
+ledger h: Field;
+export circuit store(v: Field): [] {
+  h = transientHash&lt;Field&gt;(v);
+}
+
+// correct, declare disclosure
+h = disclose(transientHash&lt;Field&gt;(v));
+
+// or, use transientCommit (nonce provides hiding, no disclose needed)
+h = transientCommit&lt;Field&gt;(v, nonce);
+</code></pre>
+<hr>
+<h2 id="version-management"><a class="header" href="#version-management">Version Management</a></h2>
+<p>Midnight has six components that must stay in sync:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Component</th><th>What it is</th><th>How to check</th></tr>
+</thead>
+<tbody>
+<tr><td>CLI tool</td><td><code>compact</code> binary</td><td><code>compact --version</code></td></tr>
+<tr><td>Compiler</td><td><code>compactc</code></td><td><code>compact compile --version</code></td></tr>
+<tr><td>Runtime</td><td><code>@midnight-ntwrk/compact-runtime</code></td><td><code>npm list</code></td></tr>
+<tr><td>Ledger</td><td><code>@midnight-ntwrk/ledger-v8</code></td><td><code>npm list</code></td></tr>
+<tr><td>JS libraries</td><td><code>@midnight-ntwrk/midnight-js-*</code></td><td><code>npm list</code></td></tr>
+<tr><td>Proof server</td><td>Docker image</td><td>image tag</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="check-current-versions"><a class="header" href="#check-current-versions">Check Current Versions</a></h3>
+<pre><code class="language-bash">compact --version
+compact compile --version
+npm list @midnight-ntwrk/compact-runtime
+npm list @midnight-ntwrk/ledger-v8
+</code></pre>
+<h3 id="consult-the-compatibility-matrix"><a class="header" href="#consult-the-compatibility-matrix">Consult the Compatibility Matrix</a></h3>
+<p>The <a href="https://docs.midnight.network/relnotes/support-matrix">official release compatibility matrix</a> is the source of truth. Never mix versions without checking it.</p>
+<h3 id="lock-exact-versions-in-packagejson"><a class="header" href="#lock-exact-versions-in-packagejson">Lock Exact Versions in <code>package.json</code></a></h3>
+<pre><code class="language-json">{
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.15.0",
+    "@midnight-ntwrk/ledger-v8": "8.0.3"
+  }
+}
+</code></pre>
+<p>Do not use <code>^</code> or <code>~</code>, these allow automatic updates that silently break compatibility.</p>
+<h3 id="use-npm-ci-for-reproducible-installs"><a class="header" href="#use-npm-ci-for-reproducible-installs">Use <code>npm ci</code> for Reproducible Installs</a></h3>
+<pre><code class="language-bash">rm -rf node_modules
+npm ci
+</code></pre>
+<p><code>npm ci</code> installs exactly what’s in <code>package-lock.json</code>. <code>npm install</code> fetches the latest matching version.</p>
+<h3 id="after-updating-any-component"><a class="header" href="#after-updating-any-component">After Updating Any Component</a></h3>
+<ol>
+<li>Update all related components together</li>
+<li>Recompile contracts</li>
+<li>Restart the proof server with the new Docker image</li>
+<li>Run your test suite</li>
+</ol>
+<hr>
+<h2 id="common-environment-issues"><a class="header" href="#common-environment-issues">Common Environment Issues</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Error</th><th>Cause</th><th>Fix</th></tr>
+</thead>
+<tbody>
+<tr><td><code>compact: command not found</code></td><td>Binary not on PATH</td><td><code>export PATH="$HOME/.compact/bin:$PATH"</code></td></tr>
+<tr><td><code>ERR_UNSUPPORTED_DIR_IMPORT</code></td><td>Node.js tried to import directory</td><td>Open new terminal, clear caches</td></tr>
+<tr><td>Docker connection errors</td><td>Docker Desktop not running</td><td>Start Docker Desktop</td></tr>
+<tr><td>Port 6300 in use</td><td>Another container on same port</td><td><code>-p 6301:6300</code></td></tr>
+<tr><td>Version mismatch at runtime</td><td>Outdated runtime package</td><td>Check compatibility matrix, update</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="version-check-script"><a class="header" href="#version-check-script">Version Check Script</a></h2>
+<pre><code class="language-bash">#!/bin/bash
+echo "=== Midnight Version Check ==="
+echo "CLI:"; compact --version || echo "not found"
+echo "Compiler:"; compact compile --version || echo "not found"
+echo "Runtime:"
+npm list --depth=0 | grep @midnight-ntwrk || echo "none found"
+echo "Node.js:"; node --version
+echo "Compare with: docs.midnight.network/relnotes/support-matrix"
+</code></pre>
+<p>Run this before filing a bug report.</p>
+<hr>
+<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
+<p>If you’re stuck after checking these notes:</p>
+<ol>
+<li><strong>Discord <code>#dev-chat</code></strong>, post your error message and version details</li>
+<li><strong>FAQ</strong>, <a href="https://docs.midnight.network/troubleshoot/faq">docs.midnight.network/troubleshoot/faq</a></li>
+<li><strong>Forum</strong>, <a href="https://forum.midnight.network">forum.midnight.network</a></li>
+</ol>
+<p>When asking for help, always include:</p>
+<ul>
+<li>Output of the version check script above</li>
+<li>The full error message</li>
+<li>The <code>.compact</code> file (or relevant excerpt)</li>
+<li>What you expected vs. what happened</li>
+</ul>
+<hr>
+<h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
+<ul>
+<li>Static errors: compiler catches them before output. Check the messages.</li>
+<li>Dynamic errors: happen at runtime inside generated code. Read the line numbers.</li>
+<li>Undeclared disclosure trace: read bottom to top, it traces the path from origin to disclosure.</li>
+<li>Use <code>--skip-zk</code> during development. Enable for final builds.</li>
+<li>Lock exact versions in <code>package.json</code>. Use <code>npm ci</code>.</li>
+<li>Check the compatibility matrix before updating any component.</li>
+<li>After any update: recompile, restart proof server, run tests.</li>
+</ul>
+<hr>
+<h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
+<ul>
+<li><strong>Previous:</strong> <a href="./chapter-13.html">Keywords Reference</a>  Keyword meanings</li>
+<li><strong>Next:</strong> <a href="./chapter-15.html">Security and Best Practices</a>  Privacy patterns</li>
+<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>See also:</strong> <a href="./chapter-05.html">Circuits</a>  Common circuit mistakes</li>
+<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact">14.01 Static Errors</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../chapters/chapter-13.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../chapters/chapter-15.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../chapters/chapter-13.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../chapters/chapter-15.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

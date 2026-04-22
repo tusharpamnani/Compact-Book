@@ -1,0 +1,14 @@
+[book]
+title = "Compact Book"
+description = "A structured, example-driven guide for understanding Compact"
+authors = ["Tushar Pamnani"]
+language = "en"
+
+[output.html]
+no-section-label = false
+
+[output.html.search]
+enable = true
+
+[output.linkcheck]
+optional = true
