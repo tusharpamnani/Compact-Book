@@ -1,0 +1,35 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger storedBalance: Uint<64>;
+export ledger storedHash: Field;
+
+witness getBalance(): Uint<64>;
+witness getSecret(): Field;
+
+// Correct: wrap witness value before ledger write
+export circuit recordBalance(): [] {
+  storedBalance = disclose(getBalance());
+}
+
+// Correct: disclose on return value
+export circuit exposeBalance(): Uint<64> {
+  return disclose(getBalance());
+}
+
+// Correct: disclose on comparison result
+export circuit hasBalance(minimum: Uint<64>): Boolean {
+  return disclose(getBalance()) >= minimum;
+}
+
+// Correct: transientCommit nonce provides hiding — no disclose needed
+export circuit commitSecret(nonce: Field): [] {
+  storedHash = transientCommit(getSecret(), nonce);
+}
+
+// Correct: declare at the boundary, not earlier
+export circuit computeAndStore(): [] {
+  const raw = getSecret();
+  const computed = raw + 73;  // still witness data
+  storedHash = disclose(computed as Field);
+}

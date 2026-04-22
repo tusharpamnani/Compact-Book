@@ -1,0 +1,30 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Type parameter: works on any type
+pure circuit identity<T>(x: T): T {
+  return x;
+}
+
+// Nat parameter: vector length must be known at compile time
+pure circuit firstOf<//N, T>(v: Vector<N, T>): T {
+  return v[0];
+}
+
+pure circuit lastOf<//N, T>(v: Vector<N, T>): T {
+  return v[N - 1];
+}
+
+// Multiple type parameters
+pure circuit swapPair<A, B>(p: [A, B]): [B, A] {
+  const [a, b] = p;
+  return [b, a];
+}
+
+export circuit useGenerics(): [] {
+  const a = identity<Field>(42);
+  const b = identity<Uint<8>>(5);
+  const head = firstOf<4, Field>([1, 2, 3, 4]);
+  const tail = lastOf<4, Uint<16>>(10, 20, 30, 40]);
+  const swapped = swapPair<Field, Boolean>([a, true]);
+}

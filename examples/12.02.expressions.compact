@@ -1,0 +1,37 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+struct Config { enabled: Boolean, value: Field }
+
+export circuit precedenceDemo(): [] {
+  // Relational operators are non-associative — a < b < c is a syntax error
+  const cond = 1 < 2 && 2 < 3;
+
+  // Ternary
+  const min = 1 < 2 ? 1 : 2;
+
+  // Spread
+  const base = [1, 2] as [Field, Field];
+  const full = [0, ...base, 3] as [Field, Field, Field, Field];
+}
+
+export circuit spreadAndStruct(): [] {
+  // Spread tuple
+  const a = [1, 2, 3] as [Field, Field, Field];
+  const b = [...a, 4] as [Field, Field, Field, Field];
+
+  // Struct spread
+  const c1 = Config { enabled: true, value: 1 };
+  const c2 = Config { value: 2, ..c1 };
+}
+
+export circuit mapFoldDemo(v: Vector<4, Field>): Field {
+  // map: transform
+  const doubled = map((x) => x + x, v);
+
+  // fold: accumulate
+  const sum = fold((acc, x) => acc + x, 0, v);
+  const product = fold((acc, x) => acc * x, 1, v);
+
+  return sum;
+}

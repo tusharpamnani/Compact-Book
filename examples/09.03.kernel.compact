@@ -1,0 +1,25 @@
+// 09.03 — Kernel
+// Demonstrates: Kernel ledger operations
+// Source: see 09. Ledger ADTs.md
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger kern: Kernel;
+export ledger deadline: Uint<64>;
+export ledger contractBalance: Uint<64>;
+
+export circuit checkDeadline(): Boolean {
+  return kern.blockTimeLessThan(deadline);
+}
+
+export circuit selfAddress(): ContractAddress {
+  return kern.self();
+}
+
+export circuit checkBalance(minAmount: Uint<64>): Boolean {
+  return kern.balance(minAmount);
+}
+
+export circuit deposit(amount: Uint<64>): [] {
+  contractBalance = disclose((contractBalance + amount) as Uint<64>);
+}

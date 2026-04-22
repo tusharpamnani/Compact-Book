@@ -1,0 +1,40 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export circuit typeExamples(): [] {
+  // Boolean
+  const flag: Boolean = true;
+  const other: Boolean = false;
+
+  // Field: only == and != comparisons; no < or >
+  const f: Field = 42;
+  const large = 0xdeadbeef as Field;
+
+  // Sized Uint: exact bit width
+  const x: Uint<8> = 255;       // 0..255
+  const y: Uint<64> = 1000000;
+
+  // Bounded Uint: rejects values outside range at compile time
+  const age: Uint<0..150> = 25;   // 0..149
+  const idx: Uint<0..256> = 100;  // 0..255
+
+  // Bytes: fixed-length, padded from string
+  const key: Bytes<32> = pad(32, "midnight:example:key");
+  const hash: Bytes<32> = persistentHash<Field>(42);
+
+  // Opaque: circuits see only hash, not the raw string
+  const msg: Opaque<"string"> = pad(64, "hello world");
+}
+
+export circuit typeCasts(): [] {
+  const x: Uint<64> = 42;
+  const y = x as Field;            // widen
+  const z = x as Uint<0..1000>;   // narrow — runtime error if out of range
+}
+
+export circuit defaults(): [] {
+  const b = default<Boolean>;       // false
+  const u = default<Uint<64>>;   // 0
+  const c = default<Bytes<32>>;   // 32 zero bytes
+  const o = default<Opaque<"string">>;  // zero-length
+}

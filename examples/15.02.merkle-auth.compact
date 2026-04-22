@@ -1,0 +1,19 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger members: MerkleTree<10, Bytes<32>>;
+export ledger memberCount: Counter;
+
+witness findPath(item: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+
+export circuit addMember(leaf: Bytes<32>): [] {
+  members.insert(disclose(leaf));
+  memberCount.increment(1);
+}
+
+// Proves membership without revealing which leaf was used
+export circuit proveMembership(leaf: Bytes<32>): [] {
+  const path = findPath(leaf);
+  const root = merkleTreePathRoot<10, Bytes<32>>(path);
+  assert(members.checkRoot(root), "Invalid membership proof");
+}

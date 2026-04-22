@@ -1,0 +1,43 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Nominal typing: Point and Label are distinct even with same fields
+struct Point {
+  x: Uint<32>,
+  y: Uint<32>,
+}
+
+struct Label {
+  name: Bytes<32>,
+  value: Field,
+}
+
+// First variant is the default value
+enum Status { UNSET, ACTIVE, SUSPENDED }
+
+// Structural: fully interchangeable with Bytes<32>
+type Hash = Bytes<32>;
+
+// Nominal: requires explicit cast, can't mix with Bytes<32>
+new type UserId = Bytes<32>;
+
+export circuit compositeExamples(): [] {
+  // Tuple: positional, heterogeneous
+  const pair: [Field, Boolean] = [42, true];
+  const first = pair[0];
+
+  // Vector: homogeneous fixed-length
+  const v: Vector<4, Uint<8>> = [1, 2, 3, 4];
+  const w = [10, 20, 30];  // inferred as Vector<3, ...>
+
+  // Struct construction
+  const p = Point { x: 10, y: 20 };
+  const px = p.x;
+}
+
+export circuit destructuring(): [] {
+  const [a, b] = [1, 2] as [Field, Field];
+  const {x, y} = Point { x: 1, y: 2 };
+  const {x: valX} = Point { x: 1, y: 2 };  // rename
+  const [first, , third] = [1, 2, 3] as [Field, Field, Field];  // skip
+}

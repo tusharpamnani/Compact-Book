@@ -1,0 +1,31 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Import all exports
+import Math;
+// Specific bindings
+import { add, mul } from Math;
+// With namespace prefix
+import Math prefix M$;
+
+// Generic module — specialize at import time
+module Container<T, //N> {
+  pure circuit first(v: Vector<N, T>): T { return v[0]; }
+  pure circuit last(v: Vector<N, T>): T { return v[N - 1]; }
+  pure circuit allEqual(v: Vector<N, T>): Boolean {
+    if (N == 1) { return true; }
+    return fold((acc, x) => acc && x == v[0], true, v);
+  }
+}
+
+import Container<Field, 4>;
+
+export circuit useMath(): [] {
+  const a = Math.add(1, 2);
+  const b = add(1, 2);           // direct import
+  const c = mul(3, 4);          // direct import
+  const d = M$sub(10, 3);       // prefixed
+  const first = Container$first([1, 2, 3, 4]);
+  const last = Container$last([1, 2, 3, 4]);
+  const allEq = Container$allEqual([5, 5, 5, 5]);
+}
