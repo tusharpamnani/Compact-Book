@@ -58,8 +58,8 @@ export circuit mint(metadataHash: Bytes<32>): [] {
     const tokenId = nextTokenId;
     const commitment = hashTokenData(caller, metadataHash);
     tokenCommitments.insert(tokenId, disclose(commitment));
-    totalSupply = disclose((totalSupply + 1) as Uint<64>));
-    nextTokenId = disclose((tokenId + 1) as Uint<64>));
+    totalSupply = disclose((totalSupply + 1) as Uint<64>);
+    nextTokenId = disclose((tokenId + 1) as Uint<64>);
 }
 
 export circuit transfer(tokenId: Uint<64>, newOwner: Bytes<32>, tokenMetaHash: Bytes<32>): [] {
@@ -69,7 +69,7 @@ export circuit transfer(tokenId: Uint<64>, newOwner: Bytes<32>, tokenMetaHash: B
     assert(tokenCommitments.member(pubTokenId), "Token does not exist");
     const currentCommitment = tokenCommitments.lookup(pubTokenId);
     assert(currentCommitment == expectedCommitment, "Not the owner");
-    const nextCommitment = hashTokenData(disclose(newOwner)), tokenMetaHash);
+    const nextCommitment = hashTokenData(disclose(newOwner), tokenMetaHash);
     tokenCommitments.insert(pubTokenId, disclose(nextCommitment));
 }
 
@@ -195,7 +195,7 @@ import CompactStandardLibrary;
 export enum State { VACANT, OCCUPIED }
 
 export ledger state: State;
-export ledger message: Maybe<Opaque<"string">;
+export ledger message: Maybe<Opaque<"string">>;
 export ledger sequence: Counter;
 export ledger owner: Bytes<32>;
 

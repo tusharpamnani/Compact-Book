@@ -1,0 +1,66 @@
+// 09.01  Ledger ADTs
+// Demonstrates: Counter, Set, Map, List
+// Source: see 09. Ledger ADTs.md
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Counter: atomic increment, no read-modify-write contention
+export ledger votes: Counter;
+
+// Set: unique membership
+export ledger allowlist: Set<Bytes<32>>;
+
+// Map: key-value pairs
+export ledger balances: Map<Bytes<32>, Uint<64>>;
+
+// List: push/pop from front
+export ledger queue: List<Field>;
+
+export circuit addVote(): [] {
+  votes += 1;
+}
+
+export circuit removeVote(): [] {
+  votes -= 1;
+}
+
+export circuit getVotes(): Uint<64> {
+  return votes;
+}
+
+export circuit allow(addr: Bytes<32>): [] {
+  allowlist.insert(disclose(addr));
+}
+
+export circuit deny(addr: Bytes<32>): [] {
+  allowlist.remove(disclose(addr));
+}
+
+export circuit isAllowed(addr: Bytes<32>): Boolean {
+  return allowlist.member(addr);
+}
+
+export circuit deposit(addr: Bytes<32>, amount: Uint<64>): [] {
+  balances.insert(disclose(addr), disclose(amount));
+}
+
+export circuit withdraw(addr: Bytes<32>, amount: Uint<64>): [] {
+  const current = balances.lookup(addr);
+  assert(current >= amount, "Insufficient funds");
+  balances.insert(disclose(addr), disclose((current - amount) as Uint<64>));
+}
+
+export circuit enqueue(value: Field): [] {
+  queue.pushFront(disclose(value));
+}
+
+export circuit dequeue(): [] {
+  assert(!queue.isEmpty(), "Queue is empty");
+  queue.popFront();
+}
+
+export circuit peek(): Field {
+  const head = queue.head();
+  assert(head.isSome, "Queue is empty");
+  return head.value;
+}

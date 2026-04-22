@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bfb21acb.js";
+            window.path_to_searchindex_js = "searchindex-d2996e2d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-525967f2.js"></script>
@@ -1182,12 +1182,19 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 <p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
 <hr>
 <h2 id="commitment-tools"><a class="header" href="#commitment-tools">Commitment Tools</a></h2>
-<p>| Function | Output | Persists? | For ledger? | Witness-tainted? |
-|–––––|––––|———–|————|——————|—————–|
-| <code>transientHash</code> | <code>Field</code> | No | No | Yes |
-| <code>transientCommit</code> | <code>Field</code> | No | No | <strong>No</strong> |
-| <code>persistentHash</code> | <code>Bytes&lt;32&gt;</code> | Yes | Yes | Yes |
-| <code>persistentCommit</code> | <code>Bytes&lt;32&gt;</code> | Yes | Yes | <strong>No</strong> |</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Function</th><th>Output</th><th>Persists?</th><th>For ledger?</th><th>Witness-tainted?</th></tr>
+</thead>
+<tbody>
+<tr><td><code>transientHash</code></td><td><code>Field</code></td><td>No</td><td>No</td><td>Yes</td></tr>
+<tr><td><code>transientCommit</code></td><td><code>Field</code></td><td>No</td><td>No</td><td><strong>No</strong></td></tr>
+<tr><td><code>persistentHash</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td><code>persistentCommit</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
+</tbody>
+</table>
+</div>
 <ul>
 <li><strong>Persistent:</strong> Survives contract upgrades. Use for long-term storage.</li>
 <li><strong>Transient:</strong> Does not survive upgrades. Use for temporary computations.</li>
@@ -4065,8 +4072,8 @@ export circuit mint(metadataHash: Bytes&lt;32&gt;): [] {
     const tokenId = nextTokenId;
     const commitment = hashTokenData(caller, metadataHash);
     tokenCommitments.insert(tokenId, disclose(commitment));
-    totalSupply = disclose((totalSupply + 1) as Uint&lt;64&gt;));
-    nextTokenId = disclose((tokenId + 1) as Uint&lt;64&gt;));
+    totalSupply = disclose((totalSupply + 1) as Uint&lt;64&gt;);
+    nextTokenId = disclose((tokenId + 1) as Uint&lt;64&gt;);
 }
 
 export circuit transfer(tokenId: Uint&lt;64&gt;, newOwner: Bytes&lt;32&gt;, tokenMetaHash: Bytes&lt;32&gt;): [] {
@@ -4076,7 +4083,7 @@ export circuit transfer(tokenId: Uint&lt;64&gt;, newOwner: Bytes&lt;32&gt;, toke
     assert(tokenCommitments.member(pubTokenId), "Token does not exist");
     const currentCommitment = tokenCommitments.lookup(pubTokenId);
     assert(currentCommitment == expectedCommitment, "Not the owner");
-    const nextCommitment = hashTokenData(disclose(newOwner)), tokenMetaHash);
+    const nextCommitment = hashTokenData(disclose(newOwner), tokenMetaHash);
     tokenCommitments.insert(pubTokenId, disclose(nextCommitment));
 }
 
@@ -4183,7 +4190,7 @@ import CompactStandardLibrary;
 export enum State { VACANT, OCCUPIED }
 
 export ledger state: State;
-export ledger message: Maybe&lt;Opaque&lt;"string"&gt;;
+export ledger message: Maybe&lt;Opaque&lt;"string"&gt;&gt;;
 export ledger sequence: Counter;
 export ledger owner: Bytes&lt;32&gt;;
 

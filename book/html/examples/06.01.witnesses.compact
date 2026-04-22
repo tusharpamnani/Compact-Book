@@ -1,0 +1,34 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger state: Uint<8>;
+export ledger authority: Bytes<32>;
+
+// Declared here; body provided by TypeScript DApp at runtime
+witness secretKey(): Bytes<32>;
+witness callerBalance(): Uint<64>;
+
+constructor() {
+  state = 0;
+  authority = default<Bytes<32>>;
+}
+
+export circuit authorize(): [] {
+  const sk = secretKey();
+  const pk = derivePublicKey(sk);
+  authority = disclose(pk);
+  state = 1;
+}
+
+export circuit spend(amount: Uint<64>): [] {
+  // Always validate  witnesses are untrusted
+  const balance = callerBalance();
+  assert(balance >= amount, "Insufficient balance");
+  state = 2;
+}
+
+pure circuit derivePublicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "auth:pk:"), sk]
+  );
+}

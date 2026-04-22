@@ -1,0 +1,36 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+struct Point { x: Field, y: Field }
+struct Pair<T> { first: T, second: T }
+
+export circuit patternExamples(): [] {
+  // Simple pattern
+  const x = 42;
+
+  // Tuple destructuring
+  const [a, b] = [1, 2] as [Field, Field];
+  const [head, , tail] = [1, 2, 3] as [Field, Field, Field];
+
+  // Struct destructuring
+  const p = Point { x: 1, y: 2 };
+  const {px, py} = p;
+  const {x: renamedX, y} = p;  // rename field
+
+  // Typed patterns
+  const [fa, fb]: [Field, Field] = [1, 2] as [Field, Field];
+}
+
+export circuit swapAndDouble(
+  pair: [Field, Field]
+): [Field, Field] {
+  const [a, b] = pair;
+  return [b + b, a + a];
+}
+
+export circuit scalePoint(
+  {x, y}: Point,
+  scalar: Field
+): Point {
+  return Point { x: x * scalar, y: y * scalar };
+}
