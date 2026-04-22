@@ -1,0 +1,22 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Store commitment on-chain, value stays off-chain
+export ledger balanceCommitments: Map<Bytes<32>, Bytes<32>>;
+
+witness callerAddress(): Bytes<32>;
+
+export circuit commitBalance(value: Uint<64>, nonce: Field): [] {
+  // The caller address is public-derived, not witness data itself
+  const caller = disclose(callerAddress());
+  // persistentCommit: nonce hides the value even if it's guessable
+  const commitment = persistentCommit<Uint<64>>(value, nonce);
+  balanceCommitments.insert(disclose(caller), disclose(commitment));
+}
+
+export circuit verifyBalance(value: Uint<64>, nonce: Field): Boolean {
+  const caller = disclose(callerAddress());
+  const commitment = persistentCommit<Uint<64>>(value, nonce);
+  const stored = balanceCommitments.lookup(caller);
+  return stored == commitment;
+}

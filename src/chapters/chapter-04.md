@@ -130,7 +130,7 @@ export circuit commitBalance(value: Uint<64>): [] {
 ## Commitment Tools
 
 | Function | Output | Persists? | For ledger? | Witness-tainted? |
-|----------|--------|-----------|------------|------------------|-----------------|
+|----------|--------|-----------|------------|------------------|
 | `transientHash` | `Field` | No | No | Yes |
 | `transientCommit` | `Field` | No | No | **No** |
 | `persistentHash` | `Bytes<32>` | Yes | Yes | Yes |

@@ -1,0 +1,30 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Derive a public key point from a secret
+pure circuit derivePoint(scalar: Field): NativePoint {
+  return hashToCurve<Vector<2, Bytes<32>>>(
+    [pad(32, "curve:secret:"), scalar as Bytes<32>]
+  );
+}
+
+pure circuit mulGenerator(s: Field): NativePoint {
+  return ecMulGenerator(s);
+}
+
+pure circuit pointAdd(a: NativePoint, b: NativePoint): NativePoint {
+  return ecAdd(a, b);
+}
+
+export circuit keyGen(hashedSecret: Field): NativePoint {
+  return derivePoint(hashedSecret);
+}
+
+// Simplified signature check  real signatures need more logic
+export circuit verifySignature(
+  messageHash: Field,
+  signaturePoint: NativePoint,
+  pubKey: NativePoint
+): Boolean {
+  return signaturePoint == pubKey;
+}

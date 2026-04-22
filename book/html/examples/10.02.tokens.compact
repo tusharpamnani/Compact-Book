@@ -1,0 +1,60 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger kern: Kernel;
+
+new type TokenId = Bytes<32>;
+new type Amount = Uint<64>;
+
+// Mint directly to a user address  value is public
+export circuit mintPublic(
+  domainSep: Bytes<32>,
+  amount: Amount,
+  recipient: UserAddress
+): [] {
+  const color = tokenType(domainSep, kern.self());
+  const receipt = mintUnshieldedToken(color, amount, recipient);
+}
+
+// Transfer public tokens
+export circuit sendPublic(
+  color: TokenId,
+  amount: Amount,
+  recipient: UserAddress
+): [] {
+  sendUnshielded(color, amount, recipient);
+}
+
+// Receive unshielded tokens
+export circuit receivePublic(color: TokenId, amount: Amount): [] {
+  receiveUnshielded(color, amount);
+}
+
+// Threshold check without revealing exact balance
+export circuit checkBalance(color: TokenId, amount: Amount): Boolean {
+  return unshieldedBalanceLt(color, amount) == false;
+}
+
+// Mint shielded: value stays private until redeemed
+export circuit mintShielded(
+  domainSep: Bytes<32>,
+  amount: Amount,
+  nonce: Bytes<32>,
+  recipient: UserAddress
+): ShieldedCoinInfo {
+  return mintShieldedToken(domainSep, amount, nonce, recipient);
+}
+
+// Redeem and transfer in one step
+export circuit receiveAndSend(
+  coin: ShieldedCoinInfo,
+  recipient: UserAddress,
+  amount: Amount
+): ShieldedSendResult {
+  receiveShielded(coin);
+  return sendShielded(
+    coin,
+    recipient as Either<ZswapCoinPublicKey, ContractAddress>,
+    amount
+  );
+}
