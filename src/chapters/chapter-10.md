@@ -1,0 +1,268 @@
+# Standard Library
+
+This note covers the built-in functions and types that come with `import CompactStandardLibrary`.
+
+> **Docs:** [Standard Library](https://docs.midnight.network/compact/standard-library)
+> **Examples:** [10.01 Hashing](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.01.hashing.compact) · [10.02 Tokens](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.02.tokens.compact) · [10.03 Elliptic Curve](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.03.elliptic.compact)
+
+---
+
+## Intuition First
+
+The standard library is built into the compiler, it's not a file on disk. Import it once at the top of your contract, and you have access to hashing, merkle trees, token operations, elliptic curves, and more.
+
+Understanding what the standard library provides means knowing what you don't need to implement yourself: cryptographic primitives, merkle proofs, token transfers.
+
+---
+
+## Common Types
+
+### Maybe<T>
+
+An optional value, either `Some` or `None`.
+
+```compact
+circuit some<T>(value: T): Maybe<T>;
+circuit none<T>(): Maybe<T>;
+
+const h = list.head();
+assert(h.isSome, "List is empty");
+return h.value;
+```
+
+Methods:
+
+| Method | Returns | What it does |
+|--------|---------|-------------|
+| `v.isSome` | `Boolean` | True if present |
+| `v.isNone` | `Boolean` | True if absent |
+| `v.value` | `T` | The value (valid if `isSome`) |
+
+### Either<A, B>
+
+A value that is one of two types.
+
+```compact
+struct Either<A, B> {
+  isLeft: Boolean;
+  left: A;
+  right: B;
+}
+
+circuit left<A, B>(value: A): Either<A, B>;
+circuit right<A, B>(value: B): Either<A, B>;
+
+// send to a contract
+sendUnshielded(color, amount, left<ContractAddress, UserAddress>(kernel.self()));
+
+// send to a user
+sendUnshielded(color, amount, right<ContractAddress, UserAddress>(userAddr));
+```
+
+Useful for disjunction and polymorphic return types.
+
+---
+
+## Contract Types
+
+```compact
+struct ContractAddress { bytes: Bytes<32>; }
+struct UserAddress { bytes: Bytes<32>; }
+struct MerkleTreeDigest { field: Field; }
+
+struct MerkleTreePath<#n, T> {
+  leaf: T;
+  path: Vector<n, MerkleTreePathEntry>;
+}
+
+struct ShieldedCoinInfo {
+  nonce: Bytes<32>;
+  color: Bytes<32>;
+  value: Uint<128>;
+}
+```
+
+These are the building blocks for addresses, merkle proofs, and shielded tokens.
+
+---
+
+## Hashing and Commitment
+
+This is the most commonly used part of the standard library. Privacy patterns rely on these functions.
+
+| Function | Output | Persists? | For ledger? | Witness-tainted? |
+|----------|--------|-----------|------------|------------------|-----------------|-----------------|
+| `transientHash` | `Field` | No | No | Yes |
+| `transientCommit` | `Field` | No | No | **No** |
+| `persistentHash` | `Bytes<32>` | Yes | Yes | Yes |
+| `persistentCommit` | `Bytes<32>` | Yes | Yes | **No** |
+
+**Key distinction:** Commit functions include a random nonce. Hash functions don't. This matters for ledger storage and witness data.
+
+```compact
+// NOT for ledger storage, transient
+const h = transientHash<[Field, Field]>([a, b]);
+const commit = transientCommit<Field>(secret, nonce);
+
+// FOR ledger storage, persistent
+circuit publicKey(round: Field, sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>(
+    [pad(32, "midnight:lock:pk"),
+    round as Bytes<32>,
+    sk
+  ]);
+}
+
+const commitment = persistentCommit<Uint<64>>(balance, nonce);
+```
+
+**Critical:** The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.
+
+**Why `transientCommit` doesn't require `disclose()`:** The random nonce provides sufficient hiding. Even someone who knows the input can't determine the commitment without the nonce.
+
+---
+
+## Merkle Tree Functions
+
+For membership proofs:
+
+```compact
+export circuit verifyMembership(): [] {
+  const path = getMembershipPath();
+  const root = merkleTreePathRoot<8, Bytes<32>>(path);
+  assert(members.checkRoot(root), "Not a member");
+}
+```
+
+Functions:
+
+| Function | What it does |
+|---------|-------------|
+| `merkleTreePathRoot<n, T>(path)` | Computes root from path |
+| `members.checkRoot(digest)` | Verifies leaf against current root |
+
+Your DApp provides the membership path. The circuit verifies it against the on-chain root.
+
+---
+
+## Elliptic Curve Functions
+
+For cryptographic operations on the native curve:
+
+```compact
+circuit ecMulGenerator(b: Field): NativePoint;
+circuit ecMul(a: NativePoint, b: Field): NativePoint;
+circuit ecAdd(a: NativePoint, b: NativePoint): NativePoint;
+circuit hashToCurve<T>(value: T): NativePoint;
+```
+
+Use cases:
+- **Key derivation:** `hashToCurve(secretKey)` produces a public key point.
+- **Signatures:** `ecMul(generator, hash)` and point arithmetic.
+- **Commitment:** Commit to a value as a point on the curve.
+
+---
+
+## Block Time Functions
+
+```compact
+circuit blockTimeLt(time: Uint<64>): Boolean;
+circuit blockTimeGte(time: Uint<64>): Boolean;
+```
+
+These check the current block time against a deadline. Use for time-locked operations.
+
+---
+
+## Token Functions
+
+### Native Token
+
+```compact
+nativeToken(): Bytes<32>;
+tokenType(domainSep: Bytes<32>, contract: ContractAddress): Bytes<32>;
+```
+
+### Unshielded Operations
+
+```compact
+mintUnshieldedToken(domainSep, value, recipient): Bytes<32>
+sendUnshielded(color, amount, recipient): []
+receiveUnshielded(color, amount): []
+unshieldedBalanceLt(color, amount): Boolean
+unshieldedBalanceGte(color, amount): Boolean
+```
+
+Unshielded operations act on public balances. **Tip:** Prefer `unshieldedBalanceLt` over `unshieldedBalance` to avoid transaction contention on exact balance values.
+
+```compact
+// Bad: two users might have the same balance
+if (unshieldedBalance(color) >= amount) { ... }
+
+// Good: one user having balance X doesn't conflict with another having balance X
+if (unshieldedBalanceLt(color, amount) == false) { ... }  // balance >= amount
+```
+
+### Shielded Operations
+
+```compact
+mintShieldedToken(domainSep, value, nonce, recipient): ShieldedCoinInfo
+receiveShielded(coin: ShieldedCoinInfo): []
+sendShielded(input, recipient, value): ShieldedSendResult
+sendImmediateShielded(input, target, value): ShieldedSendResult
+shieldedBurnAddress(): Either<ZswapCoinPublicKey, ContractAddress>
+evolveNonce(index, nonce): Bytes<32>
+```
+
+Shielded operations work with private values. The coin contains a commitment to the value, not the value itself.
+
+---
+
+## When to Use Each
+
+| Scenario | Function | Why |
+|---------|----------|-----|
+| Privacy-preserving commitment | `persistentCommit` | Nonce hides input |
+| Public commitment | `persistentHash` | No nonce needed |
+| Temporary computation | `transientCommit` | Doesn't persist |
+| Ledger storage | `persistent*` | Survives upgrades |
+| Membership proof | `MerkleTree` | ZK-friendly |
+| Time-locked operation | `blockTimeLt` | Deadline check |
+| Public transfer | `sendUnshielded` | Simple, public |
+| Private transfer | `sendShielded` | ZK proof required |
+
+---
+
+## Common Mistakes
+
+1. **Using `transientHash` for ledger storage.** Transient values don't survive contract upgrades. Use `persistentHash` or `persistentCommit`.
+
+2. **Reusing nonces.** Two commitments with the same nonce and value are identical. Always use a fresh nonce.
+
+3. **Using `transientHash` for witness data without `disclose()`.** `transientHash` is witness-tainted. If you store the result in the ledger, you need `disclose()`.
+
+4. **Using `unshieldedBalance` for contention-prone checks.** Everyone having the same balance competes. Use `unshieldedBalanceLt` for threshold checks instead.
+
+5. **Assuming `ecMul` is safe without validation.** EC operations can produce invalid points. Validate outputs when needed.
+
+---
+
+## Quick Recap
+
+- Import `CompactStandardLibrary` once at the top. It's built into the compiler.
+- `Maybe<T>` is `some(v)` or `none()`. Check `.isSome` before `.value`.
+- `transient*` doesn't persist. `persistent*` does.
+- `transientCommit` hides witness data without `disclose()`. `transientHash` does not.
+- `unshieldedBalanceLt` is better than `unshieldedBalance` for threshold checks.
+- Nonces must never be reused. Same nonce + same value = identical commitment.
+- EC functions (`ecMul`, `hashToCurve`) are for cryptographic operations, not general math.
+
+---
+
+## Cross-Links
+
+- **Previous:** [Ledger ADTs](./chapter-09.md)  Collection types
+- **Next:** [Modules and Imports](./chapter-11.md)  Code organization
+- **See also:** [Ledger State](./chapter-04.md)  Commitment patterns
+- **See also:** [Example Projects](./chapter-16.md)  Working examples
+- **Examples:** [10.01 Hashing](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.01.hashing.compact) · [10.02 Tokens](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.02.tokens.compact) · [10.03 Elliptic Curve](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.03.elliptic.compact)
