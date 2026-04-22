@@ -1,0 +1,28 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+pure circuit double(x: Field): Field { return x + x; }
+pure circuit isPositive(x: Field): Boolean { return x > 0; }
+
+export circuit arrowDemo(
+  v: Vector<4, Field>,
+  threshold: Field
+): Vector<4, Field> {
+  // Expression body — single expression
+  const filtered = map((x) => x > threshold ? x : 0, v);
+
+  // Block body — multi-statement
+  const adjusted = map(
+    (x) => {
+      const offset = x + 1;
+      return offset;
+    },
+    v
+  );
+
+  // Named circuit reference
+  const doubled = map(double, v);
+  const positives = map(isPositive, v);
+
+  return doubled;
+}

@@ -1,0 +1,51 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger authorizedCommitments: HistoricMerkleTree<10, Bytes<32>>;
+export ledger usedNullifiers: Set<Bytes<32>>;
+export ledger accessCount: Counter;
+
+witness secretKey(): Bytes<32>;
+witness findAuthPath(pk: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+
+export circuit addAuthority(pk: Bytes<32>): [] {
+  authorizedCommitments.insert(disclose(pk));
+}
+
+export circuit access(): [] {
+  const sk = secretKey();
+  const pk = publicKey(sk);
+
+  // Prove membership via Merkle path — doesn't reveal which authority
+  const path = findAuthPath(pk);
+  assert(
+    authorizedCommitments.checkRoot(
+      merkleTreePathRoot<10, Bytes<32>>(path)
+    ),
+    "not authorized"
+  );
+
+  // Different domain separator ensures nullifier != commitment
+  const nul = nullifier(sk);
+
+  // Prevent reuse
+  assert(!usedNullifiers.member(nul), "already used");
+
+  // Set reveals SOME token was used, not WHICH one
+  usedNullifiers.insert(disclose(nul));
+  accessCount.increment(1);
+}
+
+// Commitment: proves authority existed
+pure circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "commitment:"), sk]
+  );
+}
+
+// Nullifier: proves the token was spent
+pure circuit nullifier(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "nullifier:"), sk]
+  );
+}

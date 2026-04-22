@@ -1,0 +1,49 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// Survives upgrades, needs disclose() — carries witness taint
+export ledger persistentHashes: Map<Bytes<32>, Bytes<32>>;
+// Survives upgrades, no disclose() needed — nonce provides hiding
+export ledger persistentCommits: Map<Bytes<32>, Bytes<32>>;
+// Does NOT survive upgrades, needs disclose()
+export ledger transientHash: Field;
+// Does NOT survive upgrades, no disclose() needed
+export ledger transientCommit: Field;
+
+// persistentHash: for non-sensitive public identities
+export circuit storePersistentHash(key: Bytes<32>, value: Field): [] {
+  const hash = persistentHash<Vector<2, Bytes<32>>>(
+    [key, value as Bytes<32>]
+  );
+  persistentHashes.insert(key, disclose(hash));
+}
+
+// persistentCommit: for sensitive values, nonce prevents guessing
+export circuit storePersistentCommit(
+  key: Bytes<32>,
+  value: Uint<64>,
+  nonce: Bytes<32>
+): [] {
+  const commit = persistentCommit<Uint<64>>(value, nonce);
+  persistentCommits.insert(key, disclose(commit));
+}
+
+// transientHash: for temporary computation only
+export circuit storeTransientHash(value: Field): [] {
+  transientHash = disclose(transientHash(value));
+}
+
+// transientCommit: temporary + sensitive
+export circuit storeTransientCommit(value: Field, nonce: Field): [] {
+  transientCommit = transientCommit(value, nonce);
+}
+
+export circuit verifyCommit(
+  key: Bytes<32>,
+  value: Uint<64>,
+  nonce: Bytes<32>
+): Boolean {
+  const commit = persistentCommit<Uint<64>>(value, nonce);
+  const stored = persistentCommits.lookup(key);
+  return stored == commit;
+}

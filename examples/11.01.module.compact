@@ -1,0 +1,43 @@
+// 11.01 — Module Definition
+// Demonstrates: defining and exporting from modules
+// Source: see 11. Modules and Imports.md
+pragma language_version >= 0.22;
+
+module Math {
+  export pure circuit add(a: Field, b: Field): Field {
+    return a + b;
+  }
+
+  export pure circuit mul(a: Field, b: Field): Field {
+    return a * b;
+  }
+
+  export pure circuit sub(a: Field, b: Field): Field {
+    return a - b;
+  }
+
+  export pure circuit div(a: Field, b: Field): Field {
+    return a / b;
+  }
+
+  // Not exported — private to Math
+  pure circuit helper(x: Field): Field {
+    return x + 1;
+  }
+}
+
+module Geometry {
+  export struct Point { x: Field, y: Field }
+
+  export pure circuit distance(p: Point): Field {
+    return p.x + p.y;
+  }
+
+  export pure circuit scale(p: Point, s: Field): Point {
+    return Point { x: p.x * s, y: p.y * s };
+  }
+
+  export pure circuit midpoint(a: Point, b: Point): Point {
+    return Point { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+}

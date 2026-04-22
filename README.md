@@ -19,7 +19,7 @@ Midnight is a data-protection blockchain with **two parallel worlds**:
 
 The bridge between them is zero-knowledge cryptography. Computations happen locally on private data; only a proof of correct execution goes on-chain. Validators verify the proof without ever seeing the inputs.
 
-**This is the key insight:** Midnight doesn't hide computation, it proves computation happened correctly without revealing what you computed on.
+**This is the key insight:** Midnight doesn't hide computation. It proves computation happened correctly without revealing what you computed on.
 
 ---
 
@@ -46,7 +46,7 @@ The compiler handles all the cryptographic machinery. You write business logic.
 | **TypeScript developer** | Syntax is familiar. Mental models are different, but you already understand types and functions. |
 | **Solidity developer** | You understand state and contracts. The privacy model is the new layer. |
 | **Rust developer** | You're comfortable with strong types, ownership, and bounded computation. Compact will feel natural. |
-| **ZK newcomer** | You don't need to understand circuits, you write code that compiles to them. |
+| **ZK newcomer** | You don't need to understand circuits. You write code that compiles to them. |
 
 You should be comfortable with at least one typed language before starting. Compact builds on that.
 
@@ -62,7 +62,7 @@ Start at the top. Each note assumes you understood the previous one.
 | 01 | [Why Compact](./01.%20Why%20Compact.md) | Why this design exists, what problems it solves | 🟢 Beginner |
 | 02 | [Setting Up the Compiler](./02.%20Setting%20up%20the%20compiler.md) | Install the toolchain, compile your first contract | 🟢 Beginner |
 | 03 | [Writing a Contract](./03.%20Writing%20A%20Contract.md) | The four pieces of every contract | 🟡 Intermediate |
-| 04 | [Ledger State](./04.%20Ledger%20State.md) | Public vs private state, the disclose() boundary | 🟡 Intermediate |
+| 04 | [Ledger State](./04.%20Ledger%20State.md) | Public vs private state, the `disclose()` boundary | 🟡 Intermediate |
 | 05 | [Circuits](./05.%20Circuits.md) | How circuits work, why they're not functions | 🟡 Intermediate |
 | 06 | [Witnesses](./06.%20Witnesses.md) | How private inputs enter circuits without touching the chain | 🟡 Intermediate |
 | 07 | [Explicit Disclosure](./07.%20Explicit%20Disclosure.md) | The witness protection program, common mistakes | 🔴 Advanced |
@@ -70,9 +70,19 @@ Start at the top. Each note assumes you understood the previous one.
 | 09 | [Ledger ADTs](./09.%20Ledger%20ADTs.md) | Map, Set, MerkleTree, choosing the right state structure | 🔴 Advanced |
 | 10 | [Standard Library](./10.%20Standard%20Library.md) | Hashing, tokens, merkle trees | 🔴 Advanced |
 | 11 | [Modules and Imports](./11.%20Modules%20and%20Imports.md) | Organizing code across files | 🟡 Intermediate |
-| 12 | [Example Projects](./12.%20Example%20Projects.md) | Full working contracts | 🟢 Beginner |
+| 12 | [Compact Grammar](./12.%20Compact%20Grammar.md) | Syntax rules, precedence, what the grammar enforces | 🟡 Intermediate |
+| 13 | [Keywords Reference](./13.%20Keywords%20Reference.md) | Every keyword, organized by purpose | 🟢 Beginner |
+| 14 | [Testing and Debugging](./14.%20Testing%20and%20Debugging.md) | Error reading, version management, troubleshooting | 🟡 Intermediate |
+| 15 | [Security and Best Practices](./15.%20Security%20and%20Best%20Practices.md) | Privacy patterns, commitment design, common leaks | 🔴 Advanced |
+| 16 | [Example Projects](./16.%20Example%20Projects.md) | Full working contracts with walkthroughs | 🟢 Beginner |
 
-**Reading order:** 00 → 01 → 02 → 03 → 12 (example projects) → then 04–11 as needed.
+**Reading order:**
+
+- **00 → 03 → 16**, the core loop. Read these first.
+- **04 → 07**, the privacy model. Read before touching any private data.
+- **12 → 13 → 14**, the reference layer. Read when you need detail.
+- **08 → 09 → 10 → 11**, the type system and stdlib. Read as needed.
+- **15**, security. Read before deploying anything.
 
 ---
 
@@ -92,16 +102,16 @@ Every note follows this structure:
 8. **Practical Usage**, Where it appears in real contracts
 9. **Quick Recap**, Memory anchors
 
-Cross-links connect concepts. Micro-challenges test your understanding.
+Cross-links connect concepts.
 
 ---
 
-## Core Mental Models to Build First
+## Three Core Mental Models
 
-Before you write any code, understand these three:
+Before you write any code, understand these:
 
 **1. A circuit is a constraint system, not a function.**
-It doesn't "run" in the normal sense. It declares constraints on inputs. The proof proves those constraints were satisfied.
+It doesn't "run" in the normal sense. It declares relationships between inputs and outputs that must hold. The proof proves those relationships held.
 
 **2. The ledger is public. Private data stays local.**
 `export ledger` fields are on-chain and readable by everyone. Private data lives in witnesses and never touches the chain, only a proof that you operated on it correctly.
@@ -111,7 +121,7 @@ It tells the compiler "I am intentionally making this public." The compiler prev
 
 ---
 
-## Quick Reference: The Five Program Elements
+## The Five Program Elements
 
 Every Compact contract is built from these:
 

@@ -1,0 +1,37 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger state: Uint<8>;
+export ledger result: Field;
+
+constructor() {
+  state = 0;
+  result = 0;
+}
+
+// Pure: no ledger reads/writes, no witness calls
+pure circuit double(x: Field): Field {
+  return x + x;
+}
+
+pure circuit sumAll(v: Vector<4, Field>): Field {
+  return fold((acc, x) => acc + x, 0, v);
+}
+
+pure circuit doubleAll(v: Vector<4, Field>): Vector<4, Field> {
+  return map((x) => x + x, v);
+}
+
+// Impure: reads/writes ledger state
+export circuit compute(): [] {
+  const v: Vector<4, Field> = [1, 2, 3, 4];
+  const sum = sumAll(v);
+  const doubled = double(sum);
+  result = disclose(doubled);
+  state = 1;
+}
+
+// Pure exported circuit — callable from DApp, no ledger side effects
+export pure circuit getSum(): Field {
+  return sumAll([1, 2, 3, 4]);
+}

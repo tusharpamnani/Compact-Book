@@ -1,0 +1,35 @@
+// 09.02 — Merkle Trees
+// Demonstrates: MerkleTree, HistoricMerkleTree, membership proofs
+// Source: see 09. Ledger ADTs.md
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+// MerkleTree: proves membership against current root only
+export ledger members: MerkleTree<8, Bytes<32>>;
+// HistoricMerkleTree: proves membership against any past root
+export ledger historicMembers: HistoricMerkleTree<8, Bytes<32>>;
+
+witness findMembershipPath(item: Bytes<32>): MerkleTreePath<8, Bytes<32>>;
+witness findHistoricPath(item: Bytes<32>): MerkleTreePath<8, Bytes<32>>;
+
+export circuit addMember(leaf: Bytes<32>): [] {
+  members.insert(disclose(leaf));
+}
+
+export circuit addHistoricMember(leaf: Bytes<32>): [] {
+  historicMembers.insert(disclose(leaf));
+}
+
+export circuit checkMembership(leaf: Bytes<32>): Boolean {
+  const path = findMembershipPath(leaf);
+  const root = merkleTreePathRoot<8, Bytes<32>>(path);
+  return members.checkRoot(root);
+}
+
+export circuit checkHistoricMembership(
+  leaf: Bytes<32>,
+  pastRoot: MerkleTreeDigest
+): Boolean {
+  const path = findHistoricPath(leaf);
+  return historicMembers.checkRoot(pastRoot);
+}
