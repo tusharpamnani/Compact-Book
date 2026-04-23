@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-81f3f3be.js";
+            window.path_to_searchindex_js = "searchindex-4bec0dfc.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-5dc002d3.js"></script>
+        <script src="toc-728c2333.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -239,8 +239,8 @@ Your DApp calls circuits → generates proof → submits to chain
 <tr><td>04</td><td><a href="#neovim-setup">Neovim Setup</a></td><td>Neovim plugin for Compact</td><td>🟢 Beginner</td></tr>
 <tr><td>05</td><td><a href="#formatter-usage">Formatter Usage</a></td><td>Code formatting, style enforcement</td><td>🟢 Beginner</td></tr>
 <tr><td>06</td><td><a href="#fixup-usage">Fixup Usage</a></td><td>Automatic code migration</td><td>🟡 Intermediate</td></tr>
-<tr><td>07</td><td><a href="#data-types">Data Types</a></td><td>The complete type system</td><td>🟡 Intermediate</td></tr>
-<tr><td>08</td><td><a href="#circuits">Circuits</a></td><td>How circuits work, why they’re not functions</td><td>🟡 Intermediate</td></tr>
+<tr><td>07</td><td><a href="#circuits">Data Types</a></td><td>The complete type system</td><td>🟡 Intermediate</td></tr>
+<tr><td>08</td><td><a href="#data-types">Circuits</a></td><td>How circuits work, why they’re not functions</td><td>🟡 Intermediate</td></tr>
 <tr><td>09</td><td><a href="#ledger-state">Ledger State</a></td><td>Public vs private state, the <code>disclose()</code> boundary</td><td>🟡 Intermediate</td></tr>
 <tr><td>10</td><td><a href="#witnesses">Witnesses</a></td><td>How private inputs enter circuits without touching the chain</td><td>🟡 Intermediate</td></tr>
 <tr><td>11</td><td><a href="#explicit-disclosure">Explicit Disclosure</a></td><td>The witness protection program, common mistakes</td><td>🔴 Advanced</td></tr>
@@ -555,6 +555,167 @@ export class Contract {
 <li><strong>See also:</strong> <a href="#fixup-usage">Witnesses</a>, How private data enters circuits</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="why-compact"><a class="header" href="#why-compact">Why Compact?</a></h1>
+<p>This note explains why Compact exists, the problem it solves, why traditional approaches fail, and what design choices make it different.</p>
+<hr>
+<h2 id="intuition-first-1"><a class="header" href="#intuition-first-1">Intuition First</a></h2>
+<p>Before Compact, writing privacy-preserving smart contracts required either:</p>
+<ol>
+<li><strong>Writing raw ZK circuits</strong>, Cryptographically correct but inaccessible to most developers.</li>
+<li><strong>Using traditional smart contracts</strong>, Accessible but with no privacy at all.</li>
+</ol>
+<p>Compact sits between these extremes. It makes privacy-preserving computation accessible to TypeScript developers by handling the circuit generation automatically. You write code that looks familiar; the compiler produces the cryptographic machinery.</p>
+<p>The tradeoff is bounded computation. Compact intentionally cannot express Turing-complete programs. In exchange, every valid program compiles to a circuit.</p>
+<hr>
+<h2 id="the-three-approaches"><a class="header" href="#the-three-approaches">The Three Approaches</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Approach</th><th>Privacy</th><th>Accessibility</th><th>Complexity</th></tr>
+</thead>
+<tbody>
+<tr><td>Raw ZK circuits</td><td>Full</td><td>Requires cryptographic expertise</td><td>Extremely high</td></tr>
+<tr><td>Traditional smart contracts (Solidity)</td><td>None</td><td>Accessible to developers</td><td>Low</td></tr>
+<tr><td><strong>Compact</strong></td><td><strong>Full</strong></td><td><strong>TypeScript-like syntax</strong></td><td><strong>Medium</strong></td></tr>
+</tbody>
+</table>
+</div>
+<p>Compact doesn’t add privacy to existing contracts. It builds privacy into the model from the start, at the language level.</p>
+<hr>
+<h2 id="the-privacy-model"><a class="header" href="#the-privacy-model">The Privacy Model</a></h2>
+<p>Traditional smart contracts have one world: public state that everyone can see. Midnight has two.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>World</th><th>Location</th><th>Visibility</th><th>Contents</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Public</strong></td><td>On-chain</td><td>Everyone</td><td>Proofs, contract code, public data</td></tr>
+<tr><td><strong>Private</strong></td><td>Local storage</td><td>Only the owner</td><td>Sensitive data, secrets</td></tr>
+</tbody>
+</table>
+</div>
+<p>Computations happen locally on private data. A ZK proof of correctness is submitted on-chain. Validators verify the proof without seeing the inputs.</p>
+<p><strong>The key insight:</strong> Privacy doesn’t mean “hiding everything.” It means proving you have the right to do something without revealing what that something is. A ZK proof says: “I ran this computation correctly” without revealing the inputs to that computation.</p>
+<hr>
+<h2 id="why-not-just-use-traditional-contracts"><a class="header" href="#why-not-just-use-traditional-contracts">Why Not Just Use Traditional Contracts?</a></h2>
+<p>Traditional contracts make everything public by default. This is fine for many use cases, but breaks down when:</p>
+<ul>
+<li><strong>Regulated data</strong>, Healthcare (HIPAA), finance (SOX), identity (KYC). Public exposure isn’t optional.</li>
+<li><strong>Competitive data</strong>, Bid amounts, inventory levels, proprietary information.</li>
+<li><strong>Personal data</strong>, Balances, transaction history, credit scores.</li>
+</ul>
+<p>You could encrypt data on-chain, but then no one can verify computation on it. Traditional ZK approach is to write circuits from scratch, extremely difficult to get right and audit.</p>
+<p>Compact makes the ZK approach accessible.</p>
+<hr>
+<h2 id="type-safety-at-the-language-level"><a class="header" href="#type-safety-at-the-language-level">Type Safety at the Language Level</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Language</th><th>Type Safety</th><th>What it means</th></tr>
+</thead>
+<tbody>
+<tr><td>JavaScript</td><td>None</td><td>Any value, any type, runtime errors</td></tr>
+<tr><td>Solidity</td><td>Loosely typed</td><td>Implicit conversions, overflow allowed</td></tr>
+<tr><td>TypeScript</td><td>Optional</td><td>Opt-in with <code>tsconfig</code>, can be bypassed</td></tr>
+<tr><td><strong>Compact</strong></td><td><strong>Strong, enforced</strong></td><td><strong>Compiler rejects any program that doesn’t type-check</strong></td></tr>
+</tbody>
+</table>
+</div>
+<p>Strong type safety matters in Compact because the type system tracks data flow for privacy enforcement. If types were loose, the compiler couldn’t track where private data travels.</p>
+<hr>
+<h2 id="verifiability-vs-privacy"><a class="header" href="#verifiability-vs-privacy">Verifiability vs. Privacy</a></h2>
+<p>| You want | Traditional contracts | Raw ZK circuits | Compact |
+|———|—————––|—————–|—————|––––|
+| Everything verifiable | Yes | Yes | Yes |
+| Full privacy | <strong>No</strong> | Yes | Yes |
+| Accessible syntax | Yes | <strong>No</strong> | Yes |</p>
+<p>Compact gives you both verifiability and privacy without requiring cryptographic expertise. You don’t write a single circuit by hand.</p>
+<hr>
+<h2 id="selective-disclosure"><a class="header" href="#selective-disclosure">Selective Disclosure</a></h2>
+<p>Compact supports selective disclosure, users choose exactly what to reveal and to whom. This enables regulated use cases:</p>
+<ul>
+<li><strong>Healthcare:</strong> Prove you meet age requirements without revealing your birthday.</li>
+<li><strong>Finance:</strong> Prove your balance exceeds a threshold without revealing the balance.</li>
+<li><strong>Identity:</strong> Prove citizenship without revealing your nationality or full address.</li>
+</ul>
+<p>This isn’t a feature bolted on. It’s baked into the model via <code>disclose()</code>, a compile-time boundary that marks intentional disclosure.</p>
+<hr>
+<h2 id="when-to-choose-compact"><a class="header" href="#when-to-choose-compact">When to Choose Compact</a></h2>
+<p>Use Compact when you need:</p>
+<ul>
+<li>Privacy-preserving logic on a public blockchain</li>
+<li>To prove correctness without revealing inputs</li>
+<li>TypeScript-like development without learning ZK circuit design</li>
+<li>Selective disclosure for regulated data</li>
+</ul>
+<hr>
+<h2 id="when-not-to-choose-compact"><a class="header" href="#when-not-to-choose-compact">When Not to Choose Compact</a></h2>
+<p>Compact is not the right tool when:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Scenario</th><th>Why not Compact</th><th>Alternative</th></tr>
+</thead>
+<tbody>
+<tr><td>No privacy requirements</td><td>Traditional contracts are simpler</td><td>Solidity</td></tr>
+<tr><td>Turing-complete computation needed</td><td>Compact is intentionally bounded</td><td>Raw circuits</td></tr>
+<tr><td>Dynamically-sized data structures</td><td>All sizes must be compile-time constants</td><td>Design around bounded structures</td></tr>
+<tr><td>Complex cryptography needed</td><td>Compact generates standard circuits</td><td>Write custom circuits</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="the-core-tradeoff"><a class="header" href="#the-core-tradeoff">The Core Tradeoff</a></h2>
+<p>Compact trades:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>What you give up</th><th>What you get</th></tr>
+</thead>
+<tbody>
+<tr><td>Turing-completeness</td><td>Automatic ZK circuit compilation</td></tr>
+<tr><td>Dynamic typing</td><td>Strong type safety enforced at compile time</td></tr>
+<tr><td>Implicit privacy</td><td>Privacy model that works at the language level</td></tr>
+</tbody>
+</table>
+</div>
+<p>This tradeoff is explicit and intentional. If you need full Turing-completeness, you don’t need Compact. But if you need privacy-preserving smart contracts and don’t want to write circuits by hand, Compact is purpose-built for exactly this.</p>
+<hr>
+<h2 id="comparison-layer-1"><a class="header" href="#comparison-layer-1">Comparison Layer</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Feature</th><th>Solidity</th><th>Raw ZK (Circom)</th><th>Compact</th></tr>
+</thead>
+<tbody>
+<tr><td>Language</td><td>Solidity</td><td>Circom/DSL</td><td>TypeScript-like</td></tr>
+<tr><td>Privacy model</td><td>None</td><td>Full</td><td>Full</td></tr>
+<tr><td>Type safety</td><td>Loose</td><td>Manual</td><td>Enforced</td></tr>
+<tr><td>Learning curve</td><td>Low</td><td>Very high</td><td>Medium</td></tr>
+<tr><td>Compilation</td><td>EVM bytecode</td><td>Circuit</td><td>ZK circuits + TS</td></tr>
+<tr><td>State model</td><td>On-chain only</td><td>Custom</td><td>Public + private</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="quick-recap-1"><a class="header" href="#quick-recap-1">Quick Recap</a></h2>
+<ul>
+<li>Compact bridges the gap between inaccessible raw ZK and privacy-free traditional contracts.</li>
+<li>Midnight has two worlds: public (on-chain) and private (local). Only the proof goes on-chain.</li>
+<li>Selective disclosure lets users reveal exactly what they choose, to whom they choose.</li>
+<li>Compact trades Turing-completeness for automatic ZK circuit generation and strong type safety.</li>
+<li>If you don’t need privacy, traditional contracts are simpler. If you need full control, raw circuits exist.</li>
+<li>The type system is strict by design, it tracks data flow for privacy enforcement.</li>
+</ul>
+<hr>
+<h2 id="cross-links-1"><a class="header" href="#cross-links-1">Cross-Links</a></h2>
+<ul>
+<li><strong>Next:</strong> <a href="#setting-up-the-compiler">Setting Up the Compiler</a>, Install the toolchain</li>
+<li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>, How the two-world model works</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>, How selective disclosure works</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="modules-and-imports"><a class="header" href="#modules-and-imports">Modules and Imports</a></h1>
 <p>This note covers organizing code across files using Compact’s static module system.</p>
 <blockquote>
@@ -562,7 +723,7 @@ export class Contract {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.01.module.compact">11.01 Module Definition</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.02.imports.compact">11.02 Imports</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.03.exports.compact">11.03 Exports</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-1"><a class="header" href="#intuition-first-1">Intuition First</a></h2>
+<h2 id="intuition-first-2"><a class="header" href="#intuition-first-2">Intuition First</a></h2>
 <p>Compact uses a static module system, modules are defined before use, and file resolution is determined at compile time. There are no runtime imports or dynamic module loading.</p>
 <p>This is simpler than it sounds. If you’re coming from TypeScript or Rust, you already know the pattern:</p>
 <ol>
@@ -720,7 +881,7 @@ export circuit getValue(): Field {
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-1"><a class="header" href="#comparison-layer-1">Comparison Layer</a></h2>
+<h2 id="comparison-layer-2"><a class="header" href="#comparison-layer-2">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -759,12 +920,12 @@ export circuit getValue(): Field {
 </table>
 </div>
 <hr>
-<h2 id="cross-links-1"><a class="header" href="#cross-links-1">Cross-Links</a></h2>
+<h2 id="cross-links-2"><a class="header" href="#cross-links-2">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#witnesses">Standard Library</a>  Built-in utilities</li>
 <li><strong>Next:</strong> <a href="#ledger-adts">Compact Grammar</a>  Syntax rules</li>
 <li><strong>See also:</strong> <a href="#vs-code-extension">Writing a Contract</a>  Contract structure</li>
-<li><strong>See also:</strong> <a href="#circuits">Data Types</a>  Type definitions</li>
+<li><strong>See also:</strong> <a href="#data-types">Data Types</a>  Type definitions</li>
 <li><strong>Examples:</strong> <a href="examples/11.01.module.compact">11.01 Module</a> · <a href="examples/11.02.imports.compact">11.02 Imports</a> · <a href="examples/11.03.exports.compact">11.03 Exports</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -774,7 +935,7 @@ export circuit getValue(): Field {
 <p><strong>Goal after this note:</strong> Have <code>compact</code> installed and able to compile a basic contract.</p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-2"><a class="header" href="#intuition-first-2">Intuition First</a></h2>
+<h2 id="intuition-first-3"><a class="header" href="#intuition-first-3">Intuition First</a></h2>
 <p>Compact has two tools:</p>
 <ul>
 <li><strong><code>compact</code></strong>, The CLI you use day-to-day (compile, format, fixup).</li>
@@ -910,7 +1071,7 @@ compact list --installed      # list installed versions
 </code></pre>
 <p>This gives you <code>Maybe</code>, <code>Either</code>, hashing functions, token operations, and more.</p>
 <hr>
-<h2 id="quick-recap-1"><a class="header" href="#quick-recap-1">Quick Recap</a></h2>
+<h2 id="quick-recap-2"><a class="header" href="#quick-recap-2">Quick Recap</a></h2>
 <ul>
 <li><code>compact</code> is the CLI. <code>compact compile</code> invokes the compiler.</li>
 <li>Install via the shell script. Add <code>$HOME/.compact/bin</code> to your PATH.</li>
@@ -920,7 +1081,7 @@ compact list --installed      # list installed versions
 <li>Import <code>CompactStandardLibrary</code> at the top of every contract.</li>
 </ul>
 <hr>
-<h2 id="cross-links-2"><a class="header" href="#cross-links-2">Cross-Links</a></h2>
+<h2 id="cross-links-3"><a class="header" href="#cross-links-3">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#modules-and-imports">Why Compact</a>, Design goals</li>
 <li><strong>Next:</strong> <a href="#vs-code-extension">Writing a Contract</a>, Write your first contract</li>
@@ -933,7 +1094,7 @@ compact list --installed      # list installed versions
 <p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/vscode-plugin">VS Code Extension</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-3"><a class="header" href="#intuition-first-3">Intuition First</a></h2>
+<h2 id="intuition-first-4"><a class="header" href="#intuition-first-4">Intuition First</a></h2>
 <p>The VS Code extension adds Compact language support to Visual Studio Code. It highlights keywords, provides code snippets, and integrates with the compiler for error reporting.</p>
 <p>Installed via a VSIX file, not the VS Code marketplace. The extension is maintained by the Midnight team.</p>
 <hr>
@@ -1060,7 +1221,7 @@ export circuit interact(): [] {
 }
 </code></pre>
 <hr>
-<h2 id="quick-recap-2"><a class="header" href="#quick-recap-2">Quick Recap</a></h2>
+<h2 id="quick-recap-3"><a class="header" href="#quick-recap-3">Quick Recap</a></h2>
 <ul>
 <li>Install via VSIX file.</li>
 <li>Syntax highlighting works automatically.</li>
@@ -1069,7 +1230,7 @@ export circuit interact(): [] {
 <li>Use Ctrl+Shift+B to build.</li>
 </ul>
 <hr>
-<h2 id="cross-links-3"><a class="header" href="#cross-links-3">Cross-Links</a></h2>
+<h2 id="cross-links-4"><a class="header" href="#cross-links-4">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#compact-grammar">Neovim Setup</a>  Neovim editor</li>
 <li><strong>Next:</strong> <a href="#writing-a-contract">Testing and Debugging</a>  Error handling</li>
@@ -1082,7 +1243,7 @@ export circuit interact(): [] {
 <p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/neovim-setup">Neovim Setup</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-4"><a class="header" href="#intuition-first-4">Intuition First</a></h2>
+<h2 id="intuition-first-5"><a class="header" href="#intuition-first-5">Intuition First</a></h2>
 <p>The compact.vim plugin provides language features for Compact source files in Neovim. It’s not an official Midnight plugin, but it’s the recommended way to edit <code>.compact</code> files with proper syntax highlighting and indentation.</p>
 <p>The plugin matches the language features found in the VS Code extension, but for Neovim.</p>
 <hr>
@@ -1152,7 +1313,7 @@ zM         " close all folds
 </code></pre>
 <p>The tree-sitter parser provides accurate syntax highlighting and better performance.</p>
 <hr>
-<h2 id="quick-recap-3"><a class="header" href="#quick-recap-3">Quick Recap</a></h2>
+<h2 id="quick-recap-4"><a class="header" href="#quick-recap-4">Quick Recap</a></h2>
 <ul>
 <li>Install via your plugin manager.</li>
 <li>Syntax highlighting and indentation work automatically.</li>
@@ -1160,7 +1321,7 @@ zM         " close all folds
 <li>Review troubleshooting for issues.</li>
 </ul>
 <hr>
-<h2 id="cross-links-4"><a class="header" href="#cross-links-4">Cross-Links</a></h2>
+<h2 id="cross-links-5"><a class="header" href="#cross-links-5">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#example-projects">Fixup Usage</a>  Automatic code migration</li>
 <li><strong>Next:</strong> <a href="#keywords-reference">VS Code Extension</a>  VS Code setup</li>
@@ -1173,7 +1334,7 @@ zM         " close all folds
 <p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/formatter-usage">Formatter Usage</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-5"><a class="header" href="#intuition-first-5">Intuition First</a></h2>
+<h2 id="intuition-first-6"><a class="header" href="#intuition-first-6">Intuition First</a></h2>
 <p>The formatter is part of the Compact toolchain. It takes your source file, applies consistent spacing, indentation, and line breaks, and writes a formatted version.</p>
 <p>Formatter is not the same as fixing errors. It makes your code readable and consistent. It doesn’t change your logic, only the whitespace.</p>
 <p>Two ways to use the formatter:</p>
@@ -1284,7 +1445,7 @@ jobs:
         run: compact format --check contracts/
 </code></pre>
 <hr>
-<h2 id="quick-recap-4"><a class="header" href="#quick-recap-4">Quick Recap</a></h2>
+<h2 id="quick-recap-5"><a class="header" href="#quick-recap-5">Quick Recap</a></h2>
 <ul>
 <li><code>format-compact</code> rewrites whitespace without changing logic.</li>
 <li>Use <code>compact format</code> for convenient batch formatting.</li>
@@ -1293,7 +1454,7 @@ jobs:
 <li>The formatter ensures consistent style across your codebase.</li>
 </ul>
 <hr>
-<h2 id="cross-links-5"><a class="header" href="#cross-links-5">Cross-Links</a></h2>
+<h2 id="cross-links-6"><a class="header" href="#cross-links-6">Cross-Links</a></h2>
 <ul>
 <li><strong>Next:</strong> <a href="#example-projects">Fixup Usage</a>  Automatic code migration</li>
 <li><strong>See also:</strong> <a href="#setting-up-the-compiler">Setting Up the Compiler</a>  Toolchain installation</li>
@@ -1305,7 +1466,7 @@ jobs:
 <p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/fixup-usage">Fixup Usage</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-6"><a class="header" href="#intuition-first-6">Intuition First</a></h2>
+<h2 id="intuition-first-7"><a class="header" href="#intuition-first-7">Intuition First</a></h2>
 <p>The fixup tool exists because Compact evolves. When the language adds new syntax or changes existing behavior, old code may not compile.</p>
 <p>Fixup reads your source file, applies automatic migrations for known language changes, writes the updated code. It’s like a linter that fixes things for you.</p>
 <p>Fixup doesn’t make arbitrary changes. It only applies known transformations from documented language changes.</p>
@@ -1402,7 +1563,7 @@ compact compile contracts/contract.compact contracts/managed/contract
 npm test
 </code></pre>
 <hr>
-<h2 id="quick-recap-5"><a class="header" href="#quick-recap-5">Quick Recap</a></h2>
+<h2 id="quick-recap-6"><a class="header" href="#quick-recap-6">Quick Recap</a></h2>
 <ul>
 <li>Fixup automatically migrates code for language changes.</li>
 <li>Always review changes before committing.</li>
@@ -1410,7 +1571,7 @@ npm test
 <li>Fixup doesn’t fix logic errors, only deprecated syntax.</li>
 </ul>
 <hr>
-<h2 id="cross-links-6"><a class="header" href="#cross-links-6">Cross-Links</a></h2>
+<h2 id="cross-links-7"><a class="header" href="#cross-links-7">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#testing-and-debugging">Formatter Usage</a>  Code formatting</li>
 <li><strong>Next:</strong> <a href="#example-projects">Neovim Setup</a>  Editor integration</li>
@@ -1424,7 +1585,7 @@ npm test
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact">08.01 Primitives</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact">08.02 Composites</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-7"><a class="header" href="#intuition-first-7">Intuition First</a></h2>
+<h2 id="intuition-first-8"><a class="header" href="#intuition-first-8">Intuition First</a></h2>
 <p>Compact is statically and strongly typed. Every expression has a type known at compile time. All types have fixed sizes at compile time. No <code>any</code>, no implicit <code>undefined</code>, no guessing.</p>
 <p>The type system serves two purposes in Compact:</p>
 <ol>
@@ -1598,7 +1759,7 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-2"><a class="header" href="#comparison-layer-2">Comparison Layer</a></h2>
+<h2 id="comparison-layer-3"><a class="header" href="#comparison-layer-3">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1617,7 +1778,7 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-6"><a class="header" href="#quick-recap-6">Quick Recap</a></h2>
+<h2 id="quick-recap-7"><a class="header" href="#quick-recap-7">Quick Recap</a></h2>
 <ul>
 <li>All types are fixed-size at compile time. No <code>any</code>.</li>
 <li><code>Field</code> supports only <code>==</code> and <code>!=</code>. Use <code>Uint&lt;0..n&gt;</code> for ordered comparisons.</li>
@@ -1628,12 +1789,94 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
 <li>Opaque values are not hidden, they’re just not directly readable by circuits.</li>
 </ul>
 <hr>
-<h2 id="cross-links-7"><a class="header" href="#cross-links-7">Cross-Links</a></h2>
+<h2 id="cross-links-8"><a class="header" href="#cross-links-8">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="#data-types">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>Previous:</strong> <a href="#circuits">Explicit Disclosure</a>  Disclosure boundary</li>
 <li><strong>Next:</strong> <a href="#ledger-state">Ledger ADTs</a>  Collection types for ledger state</li>
 <li><strong>See also:</strong> <a href="#witnesses">Standard Library</a>  Built-in types</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact">08.01 Primitives</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact">08.02 Composites</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h1>
+<p>This note covers conditionals, loops, and assertions in Compact.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference">Compact Reference</a></p>
+</blockquote>
+<hr>
+<h2 id="intuition-first-9"><a class="header" href="#intuition-first-9">Intuition First</a></h2>
+<p>Control flow in Compact is constrained by design. No recursion, bounded loops only.</p>
+<hr>
+<h2 id="conditionals"><a class="header" href="#conditionals">Conditionals</a></h2>
+<h3 id="ifelse"><a class="header" href="#ifelse">if/else</a></h3>
+<pre><code class="language-compact">if (condition) {
+  // then branch
+} else {
+  // else branch
+}
+</code></pre>
+<h3 id="one-arm-if"><a class="header" href="#one-arm-if">One-arm if</a></h3>
+<pre><code class="language-compact">if (value &gt; 0) {
+  result = true;
+}
+</code></pre>
+<h3 id="no-else-if"><a class="header" href="#no-else-if">No else-if</a></h3>
+<pre><code class="language-compact">// wrong - not allowed
+if (x == 1) { } else if (x == 2) { }
+
+// correct
+if (x == 1) { } else { if (x == 2) { } }
+</code></pre>
+<hr>
+<h2 id="assertions"><a class="header" href="#assertions">Assertions</a></h2>
+<pre><code class="language-compact">assert(condition, "error message");
+assert(value &gt; 0, "Must be positive");
+</code></pre>
+<hr>
+<h2 id="loops"><a class="header" href="#loops">Loops</a></h2>
+<h3 id="for-loop"><a class="header" href="#for-loop">For Loop</a></h3>
+<pre><code class="language-compact">for (const item of collection) {
+  // process item
+}
+</code></pre>
+<p>Bound must be compile-time known.</p>
+<h3 id="fold"><a class="header" href="#fold">fold</a></h3>
+<pre><code class="language-compact">const sum = v.fold((acc, x) =&gt; acc + x, 0);
+</code></pre>
+<h3 id="no-while"><a class="header" href="#no-while">No while</a></h3>
+<p>While loops are not allowed.</p>
+<hr>
+<h2 id="return-in-loops"><a class="header" href="#return-in-loops">Return in Loops</a></h2>
+<p>Not allowed. Use fold instead:</p>
+<pre><code class="language-compact">// wrong
+for (const x of v) { if (x == target) return true; }
+
+// correct
+return v.fold((found, x) =&gt; found || x == target, false, v);
+</code></pre>
+<hr>
+<h2 id="common-patterns"><a class="header" href="#common-patterns">Common Patterns</a></h2>
+<h3 id="finding-an-element"><a class="header" href="#finding-an-element">Finding an element</a></h3>
+<pre><code class="language-compact">const found = v.fold((acc, x) =&gt; acc || x == target, false, v);
+</code></pre>
+<h3 id="summing"><a class="header" href="#summing">Summing</a></h3>
+<pre><code class="language-compact">const total = v.fold((sum, x) =&gt; sum + x, 0n);
+</code></pre>
+<h3 id="maximum"><a class="header" href="#maximum">Maximum</a></h3>
+<pre><code class="language-compact">const max = v.fold((m, x) =&gt; x &gt; m ? x : m, default&lt;Field&gt;());
+</code></pre>
+<hr>
+<h2 id="quick-recap-8"><a class="header" href="#quick-recap-8">Quick Recap</a></h2>
+<ul>
+<li>if/else allowed, no else-if</li>
+<li>assert is your runtime check</li>
+<li>for loops must have compile-time bounds</li>
+<li>Use fold for early returns</li>
+</ul>
+<hr>
+<h2 id="cross-links-9"><a class="header" href="#cross-links-9">Cross-Links</a></h2>
+<ul>
+<li><strong>Previous:</strong> <a href="#data-types">Data Types</a></li>
+<li><strong>Next:</strong> <a href="#circuits">Circuits</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="circuits"><a class="header" href="#circuits">Circuits</a></h1>
@@ -1643,7 +1886,7 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-8"><a class="header" href="#intuition-first-8">Intuition First</a></h2>
+<h2 id="intuition-first-10"><a class="header" href="#intuition-first-10">Intuition First</a></h2>
 <p>A circuit is not a function. A function takes inputs, executes statements in sequence, and returns an output. A circuit declares constraints on inputs that must hold true.</p>
 <p>This distinction matters. When you write <code>return a + b</code>, you’re not “computing” a + b, you’re asserting that the output equals a + b. The proof proves this relationship held for the given inputs.</p>
 <p>Circuits are the language of constraints. Functions are the language of computation. Compact uses constraints because that’s what ZK proofs verify.</p>
@@ -1745,7 +1988,7 @@ const {x, y} = point;
 </code></pre>
 <p>Variables are immutable after binding. <code>const x = ...; x = ...;</code> is invalid. This isn’t a style choice, it’s enforced because circuits declare constraints, and reassignment would be ambiguous in a constraint system.</p>
 <hr>
-<h2 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h2>
+<h2 id="control-flow-1"><a class="header" href="#control-flow-1">Control Flow</a></h2>
 <pre><code class="language-compact">assert(state == State.SET, "Value is not initialized");
 
 if (condition) {
@@ -1823,7 +2066,7 @@ Proof submitted → verified → state updated
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-3"><a class="header" href="#comparison-layer-3">Comparison Layer</a></h2>
+<h2 id="comparison-layer-4"><a class="header" href="#comparison-layer-4">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1841,7 +2084,7 @@ Proof submitted → verified → state updated
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-7"><a class="header" href="#quick-recap-7">Quick Recap</a></h2>
+<h2 id="quick-recap-9"><a class="header" href="#quick-recap-9">Quick Recap</a></h2>
 <ul>
 <li>A circuit is a constraint declaration, not a procedure.</li>
 <li><code>return a + b</code> asserts output equals a + b. It doesn’t “compute” it in sequence.</li>
@@ -1852,12 +2095,12 @@ Proof submitted → verified → state updated
 <li>The ZK proof proves constraints were satisfied, it doesn’t reveal inputs.</li>
 </ul>
 <hr>
-<h2 id="cross-links-8"><a class="header" href="#cross-links-8">Cross-Links</a></h2>
+<h2 id="cross-links-10"><a class="header" href="#cross-links-10">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#neovim-setup">Ledger State</a>  Public state model</li>
 <li><strong>Next:</strong> <a href="#fixup-usage">Witnesses</a>  How private inputs enter circuits</li>
 <li><strong>See also:</strong> <a href="#what-is-compact-1">What is Compact</a>  Compilation overview</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>  Privacy boundary</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>  Privacy boundary</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1868,7 +2111,7 @@ Proof submitted → verified → state updated
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-9"><a class="header" href="#intuition-first-9">Intuition First</a></h2>
+<h2 id="intuition-first-11"><a class="header" href="#intuition-first-11">Intuition First</a></h2>
 <p>The ledger is Midnight’s <strong>public world</strong>. Every node on the network stores it. Everyone can read it.</p>
 <p>Private data (witnesses) lives on the user’s local machine and never touches the chain. The two are connected by <code>disclose()</code>, a compile-time annotation that marks intentional disclosure.</p>
 <p>The key insight: <strong>privacy is the default, not opt-in.</strong> Private data stays private unless you explicitly mark it for disclosure.</p>
@@ -2054,7 +2297,7 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-4"><a class="header" href="#comparison-layer-4">Comparison Layer</a></h2>
+<h2 id="comparison-layer-5"><a class="header" href="#comparison-layer-5">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -2069,7 +2312,7 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-8"><a class="header" href="#quick-recap-8">Quick Recap</a></h2>
+<h2 id="quick-recap-10"><a class="header" href="#quick-recap-10">Quick Recap</a></h2>
 <ul>
 <li>The ledger is public on-chain state. Everyone can read it.</li>
 <li>Private data (witnesses) stays local. Only the proof goes on-chain.</li>
@@ -2080,11 +2323,11 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 <li><code>transientCommit</code> can commit private values without <code>disclose()</code>. The random nonce provides sufficient hiding.</li>
 </ul>
 <hr>
-<h2 id="cross-links-9"><a class="header" href="#cross-links-9">Cross-Links</a></h2>
+<h2 id="cross-links-11"><a class="header" href="#cross-links-11">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#vs-code-extension">Writing a Contract</a>  Contract structure</li>
 <li><strong>Next:</strong> <a href="#formatter-usage">Circuits</a>  How circuits work</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>  The disclose() boundary in depth</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>  The disclose() boundary in depth</li>
 <li><strong>See also:</strong> <a href="#ledger-state">Ledger ADTs</a>  Map, Set, MerkleTree details</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></li>
 </ul>
@@ -2096,7 +2339,7 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-10"><a class="header" href="#intuition-first-10">Intuition First</a></h2>
+<h2 id="intuition-first-12"><a class="header" href="#intuition-first-12">Intuition First</a></h2>
 <p>A witness is a callback function. You declare its type in Compact, but the body is provided by your TypeScript DApp at runtime. When a circuit calls a witness, it runs locally on the user’s device, the value it returns never goes on-chain. Instead, a ZK proof proves the circuit executed correctly given that value.</p>
 <p>The name “witness” comes from ZK literature. In a proof, the witness is the secret data that proves a statement is true, without revealing what that data is. In Compact, witnesses are exactly that: secret inputs that prove the circuit ran correctly.</p>
 <hr>
@@ -2250,7 +2493,7 @@ export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
 }
 </code></pre>
 <hr>
-<h2 id="comparison-layer-5"><a class="header" href="#comparison-layer-5">Comparison Layer</a></h2>
+<h2 id="comparison-layer-6"><a class="header" href="#comparison-layer-6">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -2265,7 +2508,7 @@ export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-9"><a class="header" href="#quick-recap-9">Quick Recap</a></h2>
+<h2 id="quick-recap-11"><a class="header" href="#quick-recap-11">Quick Recap</a></h2>
 <ul>
 <li>Witnesses are callback functions, declared in Compact, implemented in TypeScript.</li>
 <li>They run locally on the user’s device. The value never goes on-chain.</li>
@@ -2276,10 +2519,10 @@ export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
 <li><strong>Always validate witness outputs.</strong> The proof proves correct logic, not sensible inputs.</li>
 </ul>
 <hr>
-<h2 id="cross-links-10"><a class="header" href="#cross-links-10">Cross-Links</a></h2>
+<h2 id="cross-links-12"><a class="header" href="#cross-links-12">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#formatter-usage">Circuits</a>  Constraint declarations</li>
-<li><strong>Next:</strong> <a href="#data-types">Explicit Disclosure</a>  Deep dive on disclose()</li>
+<li><strong>Next:</strong> <a href="#circuits">Explicit Disclosure</a>  Deep dive on disclose()</li>
 <li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>  Public vs private</li>
 <li><strong>See also:</strong> <a href="#vs-code-extension">Writing a Contract</a>  Full example</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></li>
@@ -2292,7 +2535,7 @@ export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/07.01.disclose.compact">07.01 disclose</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-11"><a class="header" href="#intuition-first-11">Intuition First</a></h2>
+<h2 id="intuition-first-13"><a class="header" href="#intuition-first-13">Intuition First</a></h2>
 <p><code>disclose()</code> is not a cryptographic operation. It does not encrypt, hide, or transform data. It is a <strong>compile-time annotation</strong> that tells the compiler: “I am intentionally making this data public.”</p>
 <p>The compiler enforces this boundary. If witness data (from a <code>witness</code> callback) reaches the public ledger without <code>disclose()</code>, the compiler errors. This is the witness protection program, it prevents accidental privacy leaks.</p>
 <p>Understanding <code>disclose()</code> means understanding that the compiler tracks data flow, not that there’s magic happening at runtime.</p>
@@ -2468,7 +2711,7 @@ export circuit storeHash(v: Field): [] {
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-6"><a class="header" href="#comparison-layer-6">Comparison Layer</a></h2>
+<h2 id="comparison-layer-7"><a class="header" href="#comparison-layer-7">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -2503,13 +2746,72 @@ export circuit storeHash(v: Field): [] {
 </table>
 </div>
 <hr>
-<h2 id="cross-links-11"><a class="header" href="#cross-links-11">Cross-Links</a></h2>
+<h2 id="cross-links-13"><a class="header" href="#cross-links-13">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#fixup-usage">Witnesses</a>  Private input mechanism</li>
-<li><strong>Next:</strong> <a href="#circuits">Data Types</a>  Type system</li>
+<li><strong>Next:</strong> <a href="#data-types">Data Types</a>  Type system</li>
 <li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>  The two-world model</li>
 <li><strong>See also:</strong> <a href="#witnesses">Standard Library</a>  Hash functions</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/07.01.disclose.compact">07.01 disclose</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="constructors"><a class="header" href="#constructors">Constructors</a></h1>
+<p>This note covers Compact constructors - the initialization logic that runs once when a contract is deployed.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/writing">Writing a Contract</a></p>
+</blockquote>
+<hr>
+<h2 id="intuition-first-14"><a class="header" href="#intuition-first-14">Intuition First</a></h2>
+<p>A constructor runs exactly once: when you deploy the contract. Set up your initial state here.</p>
+<hr>
+<h2 id="basic-constructor"><a class="header" href="#basic-constructor">Basic Constructor</a></h2>
+<pre><code class="language-compact">pragma language_version 0.22;
+
+import CompactStandardLibrary;
+
+export ledger owner: Bytes&lt;32&gt;;
+export ledger count: Uint&lt;64&gt;;
+
+constructor() {
+  owner = disclose(callerAddress());
+  count = 0;
+}
+</code></pre>
+<h3 id="with-parameters"><a class="header" href="#with-parameters">With Parameters</a></h3>
+<pre><code class="language-compact">constructor(name: Bytes&lt;32&gt;, maxSupply: Uint&lt;64&gt;) {
+  name = disclose(name);
+  maxSupply = disclose(maxSupply);
+  creator = disclose(callerAddress());
+}
+</code></pre>
+<hr>
+<h2 id="what-can-go-in-a-constructor"><a class="header" href="#what-can-go-in-a-constructor">What Can Go in a Constructor</a></h2>
+<ul>
+<li>Setting initial values</li>
+<li>Creating empty collections</li>
+<li>Recording deployer</li>
+</ul>
+<hr>
+<h2 id="what-cannot-go-in-a-constructor"><a class="header" href="#what-cannot-go-in-a-constructor">What Cannot Go in a Constructor</a></h2>
+<ul>
+<li>Circuit calls</li>
+<li>Witness calls</li>
+<li>Time-dependent logic</li>
+</ul>
+<hr>
+<h2 id="quick-recap-12"><a class="header" href="#quick-recap-12">Quick Recap</a></h2>
+<ul>
+<li>Constructor runs once at deployment</li>
+<li>Set initial state, record deployer</li>
+<li>Parameters come from deployment transaction</li>
+<li>Cannot call circuits or witnesses</li>
+</ul>
+<hr>
+<h2 id="cross-links-14"><a class="header" href="#cross-links-14">Cross-Links</a></h2>
+<ul>
+<li><strong>Previous:</strong> <a href="#explicit-disclosure">Explicit Disclosure</a></li>
+<li><strong>Next:</strong> <a href="#ledger-adts">Ledger ADTs</a></li>
+<li><strong>See also:</strong> <a href="#writing-a-contract">Writing A Contract</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="ledger-adts"><a class="header" href="#ledger-adts">Ledger ADTs</a></h1>
@@ -2519,7 +2821,7 @@ export circuit storeHash(v: Field): [] {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-12"><a class="header" href="#intuition-first-12">Intuition First</a></h2>
+<h2 id="intuition-first-15"><a class="header" href="#intuition-first-15">Intuition First</a></h2>
 <p>Ledger ADTs are the data structures you use for on-chain state. They’re not like in-memory data structures in TypeScript, they’re persistent, on-chain, and their operations produce verifiable state transitions.</p>
 <p>Each type optimizes for a specific access pattern:</p>
 <ul>
@@ -2796,7 +3098,7 @@ export circuit selfAddress(): ContractAddress {
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-7"><a class="header" href="#comparison-layer-7">Comparison Layer</a></h2>
+<h2 id="comparison-layer-8"><a class="header" href="#comparison-layer-8">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -2814,7 +3116,7 @@ export circuit selfAddress(): ContractAddress {
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-10"><a class="header" href="#quick-recap-10">Quick Recap</a></h2>
+<h2 id="quick-recap-13"><a class="header" href="#quick-recap-13">Quick Recap</a></h2>
 <ul>
 <li><strong>Counter</strong>, Low contention, atomic increment without read.</li>
 <li><strong>Cell</strong>, Default for single values. Read/write shorthand.</li>
@@ -2827,9 +3129,9 @@ export circuit selfAddress(): ContractAddress {
 <li>Choose based on access patterns. The ADT affects what your circuits can prove.</li>
 </ul>
 <hr>
-<h2 id="cross-links-12"><a class="header" href="#cross-links-12">Cross-Links</a></h2>
+<h2 id="cross-links-15"><a class="header" href="#cross-links-15">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="#circuits">Data Types</a>  Type system</li>
+<li><strong>Previous:</strong> <a href="#data-types">Data Types</a>  Type system</li>
 <li><strong>Next:</strong> <a href="#witnesses">Standard Library</a>  Hashing and token functions</li>
 <li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>  Commitment patterns</li>
 <li><strong>See also:</strong> <a href="#witnesses">Standard Library</a>  Merkle tree functions</li>
@@ -2843,7 +3145,7 @@ export circuit selfAddress(): ContractAddress {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.01.hashing.compact">10.01 Hashing</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.02.tokens.compact">10.02 Tokens</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.03.elliptic.compact">10.03 Elliptic Curve</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-13"><a class="header" href="#intuition-first-13">Intuition First</a></h2>
+<h2 id="intuition-first-16"><a class="header" href="#intuition-first-16">Intuition First</a></h2>
 <p>The standard library is built into the compiler, it’s not a file on disk. Import it once at the top of your contract, and you have access to hashing, merkle trees, token operations, elliptic curves, and more.</p>
 <p>Understanding what the standard library provides means knowing what you don’t need to implement yourself: cryptographic primitives, merkle proofs, token transfers.</p>
 <hr>
@@ -3043,7 +3345,7 @@ evolveNonce(index, nonce): Bytes&lt;32&gt;
 </li>
 </ol>
 <hr>
-<h2 id="quick-recap-11"><a class="header" href="#quick-recap-11">Quick Recap</a></h2>
+<h2 id="quick-recap-14"><a class="header" href="#quick-recap-14">Quick Recap</a></h2>
 <ul>
 <li>Import <code>CompactStandardLibrary</code> once at the top. It’s built into the compiler.</li>
 <li><code>Maybe&lt;T&gt;</code> is <code>some(v)</code> or <code>none()</code>. Check <code>.isSome</code> before <code>.value</code>.</li>
@@ -3054,7 +3356,7 @@ evolveNonce(index, nonce): Bytes&lt;32&gt;
 <li>EC functions (<code>ecMul</code>, <code>hashToCurve</code>) are for cryptographic operations, not general math.</li>
 </ul>
 <hr>
-<h2 id="cross-links-13"><a class="header" href="#cross-links-13">Cross-Links</a></h2>
+<h2 id="cross-links-16"><a class="header" href="#cross-links-16">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#ledger-state">Ledger ADTs</a>  Collection types</li>
 <li><strong>Next:</strong> <a href="#explicit-disclosure">Modules and Imports</a>  Code organization</li>
@@ -3066,7 +3368,7 @@ evolveNonce(index, nonce): Bytes&lt;32&gt;
 <h1 id="writing-a-contract"><a class="header" href="#writing-a-contract">Writing a Contract</a></h1>
 <p>This note covers the structure of a Compact contract, the four mandatory pieces and how they fit together.</p>
 <hr>
-<h2 id="intuition-first-14"><a class="header" href="#intuition-first-14">Intuition First</a></h2>
+<h2 id="intuition-first-17"><a class="header" href="#intuition-first-17">Intuition First</a></h2>
 <p>Every Compact contract has four mandatory pieces:</p>
 <ol>
 <li><strong><code>pragma</code></strong>, Declares the language version.</li>
@@ -3225,7 +3527,7 @@ Proof submitted → validated → state updated
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer-8"><a class="header" href="#comparison-layer-8">Comparison Layer</a></h2>
+<h2 id="comparison-layer-9"><a class="header" href="#comparison-layer-9">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -3241,7 +3543,7 @@ Proof submitted → validated → state updated
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-12"><a class="header" href="#quick-recap-12">Quick Recap</a></h2>
+<h2 id="quick-recap-15"><a class="header" href="#quick-recap-15">Quick Recap</a></h2>
 <ul>
 <li>Every contract has: <code>pragma</code>, <code>export ledger</code>, <code>witness</code>, <code>export circuit</code>.</li>
 <li>Optional: <code>constructor</code> for initialization.</li>
@@ -3252,7 +3554,7 @@ Proof submitted → validated → state updated
 <li><code>disclose()</code> = marks intentional disclosure to the public world.</li>
 </ul>
 <hr>
-<h2 id="cross-links-14"><a class="header" href="#cross-links-14">Cross-Links</a></h2>
+<h2 id="cross-links-17"><a class="header" href="#cross-links-17">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#setting-up-the-compiler">Setting Up the Compiler</a>, Toolchain setup</li>
 <li><strong>Next:</strong> <a href="#neovim-setup">Ledger State</a>, Public vs private state model</li>
@@ -3260,165 +3562,227 @@ Proof submitted → validated → state updated
 <li><strong>See also:</strong> <a href="#fixup-usage">Witnesses</a>, Private input mechanism</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="why-compact"><a class="header" href="#why-compact">Why Compact?</a></h1>
-<p>This note explains why Compact exists, the problem it solves, why traditional approaches fail, and what design choices make it different.</p>
+<h1 id="typescript-integration"><a class="header" href="#typescript-integration">TypeScript Integration</a></h1>
+<p>This note covers how to use your compiled Compact contract from TypeScript, implement witnesses, and interact with the Midnight SDK.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/writing">Writing a Contract</a> · <a href="https://docs.midnight.network/sdks">SDK</a></p>
+</blockquote>
 <hr>
-<h2 id="intuition-first-15"><a class="header" href="#intuition-first-15">Intuition First</a></h2>
-<p>Before Compact, writing privacy-preserving smart contracts required either:</p>
+<h2 id="intuition-first-18"><a class="header" href="#intuition-first-18">Intuition First</a></h2>
+<p>When you compile a Compact contract, you get TypeScript output. This output is your DApp’s interface to the contract.</p>
+<p>Three things happen on the TypeScript side:</p>
 <ol>
-<li><strong>Writing raw ZK circuits</strong>, Cryptographically correct but inaccessible to most developers.</li>
-<li><strong>Using traditional smart contracts</strong>, Accessible but with no privacy at all.</li>
+<li><strong>Witness implementations</strong>, You provide the callback bodies for witnesses</li>
+<li><strong>Circuit calls</strong>, You call circuits through the generated API</li>
+<li><strong>State reads</strong>, You read ledger state to display to users</li>
 </ol>
-<p>Compact sits between these extremes. It makes privacy-preserving computation accessible to TypeScript developers by handling the circuit generation automatically. You write code that looks familiar; the compiler produces the cryptographic machinery.</p>
-<p>The tradeoff is bounded computation. Compact intentionally cannot express Turing-complete programs. In exchange, every valid program compiles to a circuit.</p>
 <hr>
-<h2 id="the-three-approaches"><a class="header" href="#the-three-approaches">The Three Approaches</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Approach</th><th>Privacy</th><th>Accessibility</th><th>Complexity</th></tr>
-</thead>
-<tbody>
-<tr><td>Raw ZK circuits</td><td>Full</td><td>Requires cryptographic expertise</td><td>Extremely high</td></tr>
-<tr><td>Traditional smart contracts (Solidity)</td><td>None</td><td>Accessible to developers</td><td>Low</td></tr>
-<tr><td><strong>Compact</strong></td><td><strong>Full</strong></td><td><strong>TypeScript-like syntax</strong></td><td><strong>Medium</strong></td></tr>
-</tbody>
-</table>
-</div>
-<p>Compact doesn’t add privacy to existing contracts. It builds privacy into the model from the start, at the language level.</p>
+<h2 id="the-compiled-output"><a class="header" href="#the-compiled-output">The Compiled Output</a></h2>
+<p>After compiling, you get:</p>
+<pre><code>contracts/managed/myContract/
+├── contract/
+│   ├── index.js          # Main API
+│   ├── index.d.ts      # Type definitions
+│   └── index.js.map   # Source map
+├── compiler/
+│   └── contract-info.json
+├── zkir/
+│   └── *.zkir
+└── keys/
+    ├── *.prover
+    └── *.verifier
+</code></pre>
+<h3 id="the-contract-api"><a class="header" href="#the-contract-api">The Contract API</a></h3>
+<pre><code class="language-typescript">import { myContract } from './contract';
+
+const contract = new myContract(witnesses);
+
+// Call a circuit
+const tx = await contract.callTx.mint(metadataHash);
+
+// Read state
+const totalSupply = contract.state.totalSupply;
+</code></pre>
 <hr>
-<h2 id="the-privacy-model"><a class="header" href="#the-privacy-model">The Privacy Model</a></h2>
-<p>Traditional smart contracts have one world: public state that everyone can see. Midnight has two.</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>World</th><th>Location</th><th>Visibility</th><th>Contents</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>Public</strong></td><td>On-chain</td><td>Everyone</td><td>Proofs, contract code, public data</td></tr>
-<tr><td><strong>Private</strong></td><td>Local storage</td><td>Only the owner</td><td>Sensitive data, secrets</td></tr>
-</tbody>
-</table>
-</div>
-<p>Computations happen locally on private data. A ZK proof of correctness is submitted on-chain. Validators verify the proof without seeing the inputs.</p>
-<p><strong>The key insight:</strong> Privacy doesn’t mean “hiding everything.” It means proving you have the right to do something without revealing what that something is. A ZK proof says: “I ran this computation correctly” without revealing the inputs to that computation.</p>
+<h2 id="implementing-witnesses"><a class="header" href="#implementing-witnesses">Implementing Witnesses</a></h2>
+<p>Witnesses are the bridge between your Compact contract and private user data.</p>
+<h3 id="in-compact-declaration"><a class="header" href="#in-compact-declaration">In Compact (declaration)</a></h3>
+<pre><code class="language-compact">witness callerAddress(): Bytes&lt;32&gt;;
+witness secretKey(): Bytes&lt;32&gt;;
+</code></pre>
+<h3 id="in-typescript-implementation"><a class="header" href="#in-typescript-implementation">In TypeScript (implementation)</a></h3>
+<pre><code class="language-typescript">import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
+import { createWallet, createProviders } from './utils';
+
+const SEED = process.env.WALLET_SEED;
+
+async function main() {
+  const wallet = await createWallet(SEED);
+  const providers = await createProviders(wallet);
+
+  const contract = await findDeployedContract(providers, {
+    contractAddress: 'addr...',
+    compiledContract: await getCompiled('contract'),
+  });
+
+  // Implement witnesses
+  const witnesses = {
+    callerAddress: () =&gt; {
+      // Get the caller's derived address
+      return derivedAddress(wallet);
+    },
+    secretKey: () =&gt; {
+      // Get secret key for signing (never goes on-chain)
+      return wallet.secretKey;
+    },
+  };
+
+  // Call circuit with witnesses
+  const tx = await contract.circuits.transfer(
+    { context: providers },
+    tokenId,
+    newOwner,
+    tokenMetaHash
+  );
+}
+</code></pre>
+<h3 id="witness-context"><a class="header" href="#witness-context">Witness Context</a></h3>
+<pre><code class="language-typescript">interface WitnessContext {
+  transactionId: string;
+  proposer: Uint8Array;
+  nonce: bigint;
+}
+</code></pre>
 <hr>
-<h2 id="why-not-just-use-traditional-contracts"><a class="header" href="#why-not-just-use-traditional-contracts">Why Not Just Use Traditional Contracts?</a></h2>
-<p>Traditional contracts make everything public by default. This is fine for many use cases, but breaks down when:</p>
+<h2 id="circuit-invocation"><a class="header" href="#circuit-invocation">Circuit Invocation</a></h2>
+<h3 id="impure-circuits"><a class="header" href="#impure-circuits">Impure Circuits</a></h3>
+<p>These access ledger state:</p>
+<pre><code class="language-typescript">// Get context from providers
+const context = await providers.midnight();
+
+const result = await contract.circuits.mint(context, metadataHash);
+
+console.log('Transaction:', result.transactionId);
+</code></pre>
+<h3 id="pure-circuits"><a class="header" href="#pure-circuits">Pure Circuits</a></h3>
+<p>These don’t access ledger state:</p>
+<pre><code class="language-typescript">// Pure circuits don't need context
+const hash = contract.circuits.hashData(data);
+
+console.log('Hash:', hash);
+</code></pre>
+<h3 id="return-values"><a class="header" href="#return-values">Return Values</a></h3>
+<pre><code class="language-typescript">const result = await contract.circuits.getValue(context);
+
+console.log(result.value);  // The returned value
+</code></pre>
+<hr>
+<h2 id="reading-ledger-state"><a class="header" href="#reading-ledger-state">Reading Ledger State</a></h2>
+<h3 id="simple-fields"><a class="header" href="#simple-fields">Simple Fields</a></h3>
+<pre><code class="language-typescript">const state = contract.state;
+
+console.log('Total supply:', state.totalSupply);
+console.log('Owner:', state.owner);
+</code></pre>
+<h3 id="maps"><a class="header" href="#maps">Maps</a></h3>
+<pre><code class="language-typescript">// Check membership
+const hasKey = state.tokenCommitments.member(tokenId);
+
+// Get value
+const commitment = state.tokenCommitments.lookup(tokenId);
+
+// Get root (MerkleTree)
+const root = state.merkleTree.root();
+</code></pre>
+<h3 id="counters"><a class="header" href="#counters">Counters</a></h3>
+<pre><code class="language-typescript">const count = state.counter.value();
+</code></pre>
+<hr>
+<h2 id="sdk-usage"><a class="header" href="#sdk-usage">SDK Usage</a></h2>
+<h3 id="installation-4"><a class="header" href="#installation-4">Installation</a></h3>
+<pre><code class="language-bash">npm install @midnight-ntwrk/midnight-js-contracts @midnight-ntwrk/midnight-js-sdk
+</code></pre>
+<h3 id="basic-setup"><a class="header" href="#basic-setup">Basic Setup</a></h3>
+<pre><code class="language-typescript">import {
+  createWallet,
+  createProviders,
+  findDeployedContract,
+} from '@midnight-ntwrk/midnight-js-contracts';
+
+async function setup() {
+  // Create wallet from seed
+  const wallet = createWallet('your-seed-phrase');
+
+  // Create providers (connects to chain)
+  const providers = await createProviders(wallet);
+
+  return { wallet, providers };
+}
+</code></pre>
+<h3 id="deployment"><a class="header" href="#deployment">Deployment</a></h3>
+<pre><code class="language-typescript">import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
+
+async function deploy(providers, initialState) {
+  const contract = await deployContract(providers, {
+    initialState,
+    compiledContract: await getCompiled('contract'),
+  });
+
+  console.log('Deployed at:', contract.address);
+  return contract;
+}
+</code></pre>
+<hr>
+<h2 id="error-handling-2"><a class="header" href="#error-handling-2">Error Handling</a></h2>
+<pre><code class="language-typescript">try {
+  const tx = await contract.circuits.mint(context, metadataHash);
+} catch (error) {
+  if (error.message.includes('Assertion failed')) {
+    console.log('Circuit assertion failed');
+  } else if (error.message.includes('Insufficient balance')) {
+    console.log('Not enough tokens');
+  } else {
+    throw error;
+  }
+}
+</code></pre>
+<hr>
+<h2 id="type-definitions"><a class="header" href="#type-definitions">Type Definitions</a></h2>
+<p>The <code>.d.ts</code> file tells you what’s available:</p>
+<pre><code class="language-typescript">export interface CircuitResults&lt;PS, Returns&gt; {
+  state: PS;           // Post-state
+  returns: Returns;   // Return values
+}
+
+export interface Witnesses {
+  callerAddress(context: WitnessContext): [PS, Uint8Array];
+  secretKey(context: WitnessContext): [PS, Uint8Array];
+}
+
+export interface Ledger {
+  readonly totalSupply: bigint;
+  readonly owner: Uint8Array;
+  tokenCommitments: {
+    member(key: bigint): boolean;
+    lookup(key: bigint): Uint8Array;
+  };
+}
+</code></pre>
+<hr>
+<h2 id="quick-recap-16"><a class="header" href="#quick-recap-16">Quick Recap</a></h2>
 <ul>
-<li><strong>Regulated data</strong>, Healthcare (HIPAA), finance (SOX), identity (KYC). Public exposure isn’t optional.</li>
-<li><strong>Competitive data</strong>, Bid amounts, inventory levels, proprietary information.</li>
-<li><strong>Personal data</strong>, Balances, transaction history, credit scores.</li>
+<li>Compile produces TypeScript bindings in <code>contract/</code></li>
+<li>Witnesses are implemented in TypeScript, declared in Compact</li>
+<li>Call circuits via <code>contract.circuits.method(context, args)</code></li>
+<li>Read state via <code>contract.state.field</code></li>
+<li>Use SDK for wallet and deployment</li>
 </ul>
-<p>You could encrypt data on-chain, but then no one can verify computation on it. Traditional ZK approach is to write circuits from scratch, extremely difficult to get right and audit.</p>
-<p>Compact makes the ZK approach accessible.</p>
 <hr>
-<h2 id="type-safety-at-the-language-level"><a class="header" href="#type-safety-at-the-language-level">Type Safety at the Language Level</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Language</th><th>Type Safety</th><th>What it means</th></tr>
-</thead>
-<tbody>
-<tr><td>JavaScript</td><td>None</td><td>Any value, any type, runtime errors</td></tr>
-<tr><td>Solidity</td><td>Loosely typed</td><td>Implicit conversions, overflow allowed</td></tr>
-<tr><td>TypeScript</td><td>Optional</td><td>Opt-in with <code>tsconfig</code>, can be bypassed</td></tr>
-<tr><td><strong>Compact</strong></td><td><strong>Strong, enforced</strong></td><td><strong>Compiler rejects any program that doesn’t type-check</strong></td></tr>
-</tbody>
-</table>
-</div>
-<p>Strong type safety matters in Compact because the type system tracks data flow for privacy enforcement. If types were loose, the compiler couldn’t track where private data travels.</p>
-<hr>
-<h2 id="verifiability-vs-privacy"><a class="header" href="#verifiability-vs-privacy">Verifiability vs. Privacy</a></h2>
-<p>| You want | Traditional contracts | Raw ZK circuits | Compact |
-|———|—————––|—————–|—————|––––|
-| Everything verifiable | Yes | Yes | Yes |
-| Full privacy | <strong>No</strong> | Yes | Yes |
-| Accessible syntax | Yes | <strong>No</strong> | Yes |</p>
-<p>Compact gives you both verifiability and privacy without requiring cryptographic expertise. You don’t write a single circuit by hand.</p>
-<hr>
-<h2 id="selective-disclosure"><a class="header" href="#selective-disclosure">Selective Disclosure</a></h2>
-<p>Compact supports selective disclosure, users choose exactly what to reveal and to whom. This enables regulated use cases:</p>
+<h2 id="cross-links-18"><a class="header" href="#cross-links-18">Cross-Links</a></h2>
 <ul>
-<li><strong>Healthcare:</strong> Prove you meet age requirements without revealing your birthday.</li>
-<li><strong>Finance:</strong> Prove your balance exceeds a threshold without revealing the balance.</li>
-<li><strong>Identity:</strong> Prove citizenship without revealing your nationality or full address.</li>
-</ul>
-<p>This isn’t a feature bolted on. It’s baked into the model via <code>disclose()</code>, a compile-time boundary that marks intentional disclosure.</p>
-<hr>
-<h2 id="when-to-choose-compact"><a class="header" href="#when-to-choose-compact">When to Choose Compact</a></h2>
-<p>Use Compact when you need:</p>
-<ul>
-<li>Privacy-preserving logic on a public blockchain</li>
-<li>To prove correctness without revealing inputs</li>
-<li>TypeScript-like development without learning ZK circuit design</li>
-<li>Selective disclosure for regulated data</li>
-</ul>
-<hr>
-<h2 id="when-not-to-choose-compact"><a class="header" href="#when-not-to-choose-compact">When Not to Choose Compact</a></h2>
-<p>Compact is not the right tool when:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Scenario</th><th>Why not Compact</th><th>Alternative</th></tr>
-</thead>
-<tbody>
-<tr><td>No privacy requirements</td><td>Traditional contracts are simpler</td><td>Solidity</td></tr>
-<tr><td>Turing-complete computation needed</td><td>Compact is intentionally bounded</td><td>Raw circuits</td></tr>
-<tr><td>Dynamically-sized data structures</td><td>All sizes must be compile-time constants</td><td>Design around bounded structures</td></tr>
-<tr><td>Complex cryptography needed</td><td>Compact generates standard circuits</td><td>Write custom circuits</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="the-core-tradeoff"><a class="header" href="#the-core-tradeoff">The Core Tradeoff</a></h2>
-<p>Compact trades:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>What you give up</th><th>What you get</th></tr>
-</thead>
-<tbody>
-<tr><td>Turing-completeness</td><td>Automatic ZK circuit compilation</td></tr>
-<tr><td>Dynamic typing</td><td>Strong type safety enforced at compile time</td></tr>
-<tr><td>Implicit privacy</td><td>Privacy model that works at the language level</td></tr>
-</tbody>
-</table>
-</div>
-<p>This tradeoff is explicit and intentional. If you need full Turing-completeness, you don’t need Compact. But if you need privacy-preserving smart contracts and don’t want to write circuits by hand, Compact is purpose-built for exactly this.</p>
-<hr>
-<h2 id="comparison-layer-9"><a class="header" href="#comparison-layer-9">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Feature</th><th>Solidity</th><th>Raw ZK (Circom)</th><th>Compact</th></tr>
-</thead>
-<tbody>
-<tr><td>Language</td><td>Solidity</td><td>Circom/DSL</td><td>TypeScript-like</td></tr>
-<tr><td>Privacy model</td><td>None</td><td>Full</td><td>Full</td></tr>
-<tr><td>Type safety</td><td>Loose</td><td>Manual</td><td>Enforced</td></tr>
-<tr><td>Learning curve</td><td>Low</td><td>Very high</td><td>Medium</td></tr>
-<tr><td>Compilation</td><td>EVM bytecode</td><td>Circuit</td><td>ZK circuits + TS</td></tr>
-<tr><td>State model</td><td>On-chain only</td><td>Custom</td><td>Public + private</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="quick-recap-13"><a class="header" href="#quick-recap-13">Quick Recap</a></h2>
-<ul>
-<li>Compact bridges the gap between inaccessible raw ZK and privacy-free traditional contracts.</li>
-<li>Midnight has two worlds: public (on-chain) and private (local). Only the proof goes on-chain.</li>
-<li>Selective disclosure lets users reveal exactly what they choose, to whom they choose.</li>
-<li>Compact trades Turing-completeness for automatic ZK circuit generation and strong type safety.</li>
-<li>If you don’t need privacy, traditional contracts are simpler. If you need full control, raw circuits exist.</li>
-<li>The type system is strict by design, it tracks data flow for privacy enforcement.</li>
-</ul>
-<hr>
-<h2 id="cross-links-15"><a class="header" href="#cross-links-15">Cross-Links</a></h2>
-<ul>
-<li><strong>Next:</strong> <a href="#setting-up-the-compiler">Setting Up the Compiler</a>, Install the toolchain</li>
-<li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>, How the two-world model works</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>, How selective disclosure works</li>
+<li><strong>Previous:</strong> <a href="#writing-a-contract">Writing A Contract</a>  Contract structure</li>
+<li><strong>Next:</strong> <a href="#security-and-best-practices">Constructors</a>  Contract initialization</li>
+<li><strong>See also:</strong> <a href="#testing-and-debugging">Testing and Debugging</a>  Troubleshooting</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="security-and-best-practices"><a class="header" href="#security-and-best-practices">Security and Best Practices</a></h1>
@@ -3428,7 +3792,7 @@ Proof submitted → validated → state updated
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact">15.01 Hash Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact">15.02 Merkle Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact">15.03 Nullifier</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-16"><a class="header" href="#intuition-first-16">Intuition First</a></h2>
+<h2 id="intuition-first-19"><a class="header" href="#intuition-first-19">Intuition First</a></h2>
 <p>On Midnight, almost everything is potentially visible:</p>
 <ul>
 <li>Every argument to a ledger operation is public.</li>
@@ -3682,7 +4046,7 @@ pure circuit nullifier(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-14"><a class="header" href="#quick-recap-14">Quick Recap</a></h2>
+<h2 id="quick-recap-17"><a class="header" href="#quick-recap-17">Quick Recap</a></h2>
 <ul>
 <li>Almost everything on-chain is public. Assume ledger operations and circuit arguments are visible.</li>
 <li>Use <code>persistentCommit</code> over <code>persistentHash</code> for sensitive or small values.</li>
@@ -3693,11 +4057,11 @@ pure circuit nullifier(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
 <li>Use <code>findPathForLeaf</code> (O(n)) only when you don’t know the index. Use <code>pathForLeaf</code> (O(1)) when you do.</li>
 </ul>
 <hr>
-<h2 id="cross-links-16"><a class="header" href="#cross-links-16">Cross-Links</a></h2>
+<h2 id="cross-links-19"><a class="header" href="#cross-links-19">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#writing-a-contract">Testing and Debugging</a>  Version management</li>
 <li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>  Commitment patterns</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>  Disclosure boundary</li>
 <li><strong>See also:</strong> <a href="#witnesses">Standard Library</a>  Hash functions</li>
 <li><strong>See also:</strong> <a href="#security-and-best-practices">Example Projects</a>  Working contracts</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact">15.01 Hash Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact">15.02 Merkle Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact">15.03 Nullifier</a></li>
@@ -3710,7 +4074,7 @@ pure circuit nullifier(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact">14.01 Static Errors</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-17"><a class="header" href="#intuition-first-17">Intuition First</a></h2>
+<h2 id="intuition-first-20"><a class="header" href="#intuition-first-20">Intuition First</a></h2>
 <p>Compact has two error layers, not one:</p>
 <ul>
 <li><strong>Static errors</strong>, caught by the compiler before generating any output. You see these in your terminal while developing.</li>
@@ -3965,7 +4329,7 @@ echo "Compare with: docs.midnight.network/relnotes/support-matrix"
 <li>What you expected vs. what happened</li>
 </ul>
 <hr>
-<h2 id="quick-recap-15"><a class="header" href="#quick-recap-15">Quick Recap</a></h2>
+<h2 id="quick-recap-18"><a class="header" href="#quick-recap-18">Quick Recap</a></h2>
 <ul>
 <li>Static errors: compiler catches them before output. Check the messages.</li>
 <li>Dynamic errors: happen at runtime inside generated code. Read the line numbers.</li>
@@ -3976,11 +4340,11 @@ echo "Compare with: docs.midnight.network/relnotes/support-matrix"
 <li>After any update: recompile, restart proof server, run tests.</li>
 </ul>
 <hr>
-<h2 id="cross-links-17"><a class="header" href="#cross-links-17">Cross-Links</a></h2>
+<h2 id="cross-links-20"><a class="header" href="#cross-links-20">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#standard-library-1">Keywords Reference</a>  Keyword meanings</li>
 <li><strong>Next:</strong> <a href="#why-compact">Security and Best Practices</a>  Privacy patterns</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>  Disclosure boundary</li>
 <li><strong>See also:</strong> <a href="#formatter-usage">Circuits</a>  Common circuit mistakes</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact">14.01 Static Errors</a></li>
 </ul>
@@ -3988,7 +4352,7 @@ echo "Compare with: docs.midnight.network/relnotes/support-matrix"
 <h1 id="example-projects"><a class="header" href="#example-projects">Example Projects</a></h1>
 <p>This note contains working Compact contracts with detailed explanations of what each demonstrates and why the design choices matter.</p>
 <hr>
-<h2 id="intuition-first-18"><a class="header" href="#intuition-first-18">Intuition First</a></h2>
+<h2 id="intuition-first-21"><a class="header" href="#intuition-first-21">Intuition First</a></h2>
 <p>The best way to learn Compact is through working code. Each example here shows a specific pattern:</p>
 <ol>
 <li><strong>NFT Contract</strong>, Ownership transfer with commitments (the most common pattern).</li>
@@ -4246,7 +4610,7 @@ async function mint(contractAddress: string, metadata: string) {
 <li>Midnight Discord <code>#dev-showcase</code>, Community projects</li>
 </ul>
 <hr>
-<h2 id="quick-recap-16"><a class="header" href="#quick-recap-16">Quick Recap</a></h2>
+<h2 id="quick-recap-19"><a class="header" href="#quick-recap-19">Quick Recap</a></h2>
 <ul>
 <li><strong>NFT Contract</strong>, Commitment pattern for ownership without revealing secrets.</li>
 <li><strong>Collection Contract</strong>, Constructor parameters for parameterized deployment.</li>
@@ -4258,12 +4622,12 @@ async function mint(contractAddress: string, metadata: string) {
 <li><strong>Sequence</strong>, Prevents replay by making each public key unique.</li>
 </ul>
 <hr>
-<h2 id="cross-links-18"><a class="header" href="#cross-links-18">Cross-Links</a></h2>
+<h2 id="cross-links-21"><a class="header" href="#cross-links-21">Cross-Links</a></h2>
 <ul>
 <li><strong>See also:</strong> <a href="#vs-code-extension">Writing a Contract</a>  Contract structure</li>
 <li><strong>See also:</strong> <a href="#neovim-setup">Ledger State</a>  Commitment pattern</li>
 <li><strong>See also:</strong> <a href="#fixup-usage">Witnesses</a>  Private input mechanism</li>
-<li><strong>See also:</strong> <a href="#data-types">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>See also:</strong> <a href="#circuits">Explicit Disclosure</a>  Disclosure boundary</li>
 <li><strong>See also:</strong> <a href="#why-compact">Security and Best Practices</a>  Privacy patterns</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -4275,7 +4639,7 @@ async function mint(contractAddress: string, metadata: string) {
 <strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-19"><a class="header" href="#intuition-first-19">Intuition First</a></h2>
+<h2 id="intuition-first-22"><a class="header" href="#intuition-first-22">Intuition First</a></h2>
 <p>Compact’s grammar is deliberately TypeScript-adjacent, but the differences are load-bearing. TypeScript lets you write almost anything, Compact enforces structure at every level:</p>
 <ul>
 <li>Every expression has a type known at compile time.</li>
@@ -4573,7 +4937,7 @@ const a = 1, b = 2;           // multiple in one statement
 </table>
 </div>
 <hr>
-<h2 id="quick-recap-17"><a class="header" href="#quick-recap-17">Quick Recap</a></h2>
+<h2 id="quick-recap-20"><a class="header" href="#quick-recap-20">Quick Recap</a></h2>
 <ul>
 <li>A program is a flat sequence of elements. A module must be defined before imported.</li>
 <li>Pragma first, everything else in any order.</li>
@@ -4584,9 +4948,9 @@ const a = 1, b = 2;           // multiple in one statement
 <li>Three validation layers: syntax → types → privacy (disclosure).</li>
 </ul>
 <hr>
-<h2 id="cross-links-19"><a class="header" href="#cross-links-19">Cross-Links</a></h2>
+<h2 id="cross-links-22"><a class="header" href="#cross-links-22">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="#circuits">Data Types</a>  Type system</li>
+<li><strong>Previous:</strong> <a href="#data-types">Data Types</a>  Type system</li>
 <li><strong>Next:</strong> <a href="#standard-library-1">Keywords Reference</a>  Every keyword</li>
 <li><strong>See also:</strong> <a href="#witnesses">Standard Library</a>  Built-in functions</li>
 <li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></li>
@@ -4598,7 +4962,7 @@ const a = 1, b = 2;           // multiple in one statement
 <p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-keywords">Compact Keywords</a></p>
 </blockquote>
 <hr>
-<h2 id="intuition-first-20"><a class="header" href="#intuition-first-20">Intuition First</a></h2>
+<h2 id="intuition-first-23"><a class="header" href="#intuition-first-23">Intuition First</a></h2>
 <p>Compact has fewer keywords than TypeScript, no <code>class</code>, <code>function</code>, <code>interface</code>, <code>let</code>, <code>var</code>, <code>null</code>, <code>this</code>, <code>while</code>. What remains is lean and purposeful.</p>
 <p>The keywords fall into four groups:</p>
 <ol>
@@ -4710,7 +5074,7 @@ const a = 1, b = 2;           // multiple in one statement
 </table>
 </div>
 <hr>
-<h2 id="control-flow-1"><a class="header" href="#control-flow-1">Control Flow</a></h2>
+<h2 id="control-flow-2"><a class="header" href="#control-flow-2">Control Flow</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -4788,12 +5152,183 @@ const a = 1, b = 2;           // multiple in one statement
 </li>
 </ol>
 <hr>
-<h2 id="cross-links-20"><a class="header" href="#cross-links-20">Cross-Links</a></h2>
+<h2 id="cross-links-23"><a class="header" href="#cross-links-23">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="#ledger-adts">Compact Grammar</a>  Syntax rules</li>
 <li><strong>Next:</strong> <a href="#writing-a-contract">Testing and Debugging</a>  Errors and troubleshooting</li>
-<li><strong>See also:</strong> <a href="#circuits">Data Types</a>  Type system</li>
+<li><strong>See also:</strong> <a href="#data-types">Data Types</a>  Type system</li>
 <li><strong>See also:</strong> <a href="#formatter-usage">Circuits</a>  Circuit syntax</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="operators-reference"><a class="header" href="#operators-reference">Operators Reference</a></h1>
+<p>This note is a quick reference for all operators in Compact.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference">Compact Reference</a></p>
+</blockquote>
+<hr>
+<h2 id="arithmetic-operators"><a class="header" href="#arithmetic-operators">Arithmetic Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>+</code></td><td>Addition</td><td><code>a + b</code></td></tr>
+<tr><td><code>-</code></td><td>Subtraction</td><td><code>a - b</code></td></tr>
+<tr><td><code>*</code></td><td>Multiplication</td><td><code>a * b</code></td></tr>
+<tr><td><code>/</code></td><td>Division</td><td><code>a / b</code></td></tr>
+<tr><td><code>%</code></td><td>Modulo</td><td><code>a % b</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="field-arithmetic"><a class="header" href="#field-arithmetic">Field Arithmetic</a></h3>
+<p>Field operations are modulo the prime field order:</p>
+<pre><code class="language-compact">const x: Field = 10;
+const y: Field = 3;
+const z = x / y;  // 10 * inverse(3) mod p
+const r = x % y;  // Remainder
+</code></pre>
+<h3 id="uint-arithmetic"><a class="header" href="#uint-arithmetic">Uint Arithmetic</a></h3>
+<p>Uint operations wrap at the type boundary:</p>
+<pre><code class="language-compact">const x: Uint&lt;8&gt; = 255;
+const y = x + 1;  // 0 (wrapped)
+</code></pre>
+<hr>
+<h2 id="comparison-operators"><a class="header" href="#comparison-operators">Comparison Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th><th>Types</th></tr>
+</thead>
+<tbody>
+<tr><td><code>==</code></td><td>Equal</td><td>All</td></tr>
+<tr><td><code>!=</code></td><td>Not equal</td><td>All</td></tr>
+<tr><td><code>&lt;</code></td><td>Less than</td><td>Uint&lt;n&gt;, Uint&lt;0..n&gt;</td></tr>
+<tr><td><code>&lt;=</code></td><td>Less or equal</td><td>Uint&lt;n&gt;, Uint&lt;0..n&gt;</td></tr>
+<tr><td><code>&gt;</code></td><td>Greater than</td><td>Uint&lt;n&gt;, Uint&lt;0..n&gt;</td></tr>
+<tr><td><code>&gt;=</code></td><td>Greater or equal</td><td>Uint&lt;n&gt;, Uint&lt;0..n&gt;</td></tr>
+</tbody>
+</table>
+</div>
+<blockquote>
+<p><strong>Note:</strong> Field only supports <code>==</code> and <code>!=</code>. Use Uint types for comparisons.</p>
+</blockquote>
+<hr>
+<h2 id="boolean-operators"><a class="header" href="#boolean-operators">Boolean Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>&amp;&amp;</code></td><td>Logical AND</td><td><code>a &amp;&amp; b</code></td></tr>
+<tr><td>`</td><td></td><td>`</td></tr>
+<tr><td><code>!</code></td><td>Logical NOT</td><td><code>!a</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Short-circuit evaluation:</p>
+<pre><code class="language-compact">const valid = x != 0 &amp;&amp; y / x &gt; threshold;
+</code></pre>
+<hr>
+<h2 id="bitwise-operators"><a class="header" href="#bitwise-operators">Bitwise Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>&amp;</code></td><td>Bitwise AND</td><td><code>a &amp; b</code></td></tr>
+<tr><td><code>|</code></td><td>Bitwise OR</td><td><code>a | b</code></td></tr>
+<tr><td><code>^</code></td><td>Bitwise XOR</td><td><code>a ^ b</code></td></tr>
+<tr><td><code>~</code></td><td>Bitwise NOT</td><td><code>~a</code></td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="assignment-operators"><a class="header" href="#assignment-operators">Assignment Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Example</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>=</code></td><td><code>x = 5</code></td><td>Simple assignment</td></tr>
+<tr><td><code>+=</code></td><td><code>x += 1</code></td><td>x = x + 1</td></tr>
+<tr><td><code>-=</code></td><td><code>x -= 1</code></td><td>x = x - 1</td></tr>
+<tr><td><code>*=</code></td><td><code>x *= 2</code></td><td>x = x * 2</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="type-cast"><a class="header" href="#type-cast">Type Cast</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>as T</code></td><td>Cast to type T</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-compact">const x: Uint&lt;64&gt; = 42;
+const y = x as Field;                    // Widen
+const z = x as Uint&lt;0..100&gt;;             // Narrow
+</code></pre>
+<hr>
+<h2 id="other-operators"><a class="header" href="#other-operators">Other Operators</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operator</th><th>Meaning</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>? :</code></td><td>Ternary</td><td><code>a &gt; b ? a : b</code></td></tr>
+<tr><td><code>-&gt;</code></td><td>Function type</td><td><code>(x: T) -&gt; U</code></td></tr>
+<tr><td><code>[...]</code></td><td>Array literal</td><td><code>[1, 2, 3]</code></td></tr>
+<tr><td><code>...</code></td><td>Spread</td><td><code>...vec</code></td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="precedence"><a class="header" href="#precedence">Precedence</a></h2>
+<p>Highest to lowest:</p>
+<ol>
+<li><code>()</code> <code>[]</code> <code>.</code></li>
+<li><code>!</code> <code>~</code> <code>as</code></li>
+<li><code>*</code> <code>/</code> <code>%</code></li>
+<li><code>+</code> <code>-</code></li>
+<li><code>&lt;&lt;</code> <code>&gt;&gt;</code></li>
+<li><code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code></li>
+<li><code>==</code> <code>!=</code></li>
+<li><code>&amp;</code></li>
+<li><code>^</code></li>
+<li><code>|</code></li>
+<li><code>&amp;&amp;</code></li>
+<li><code>||</code></li>
+<li><code>? :</code></li>
+<li><code>=</code> <code>+=</code> etc</li>
+</ol>
+<hr>
+<h2 id="quick-reference-2"><a class="header" href="#quick-reference-2">Quick Reference</a></h2>
+<pre><code class="language-compact">// Arithmetic
+a + b - c * d / e % f
+
+// Comparison
+x == y != z &gt; w &gt;= 0 &lt;= 255
+
+// Boolean
+flag &amp;&amp; !disabled || hidden
+
+// Ternary
+max = a &gt; b ? a : b
+</code></pre>
+<hr>
+<h2 id="cross-links-24"><a class="header" href="#cross-links-24">Cross-Links</a></h2>
+<ul>
+<li><strong>Previous:</strong> <a href="#keywords-reference">Keywords Reference</a>  Keyword meanings</li>
+<li><strong>See also:</strong> <a href="#circuits">Data Types</a>  Type system</li>
 </ul>
 
                     </main>

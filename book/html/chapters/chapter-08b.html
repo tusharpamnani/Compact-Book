@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger ADTs - Compact Book</title>
+        <title>Control Flow - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -174,339 +174,97 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-adts"><a class="header" href="#ledger-adts">Ledger ADTs</a></h1>
-<p>This note covers the collection types available for on-chain state, when to use each and the tradeoffs.</p>
+                        <h1 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h1>
+<p>This note covers conditionals, loops, and assertions in Compact.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference">Compact Reference</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>Ledger ADTs are the data structures you use for on-chain state. They’re not like in-memory data structures in TypeScript, they’re persistent, on-chain, and their operations produce verifiable state transitions.</p>
-<p>Each type optimizes for a specific access pattern:</p>
-<ul>
-<li><strong>Counter</strong>, Low-contention atomic counters</li>
-<li><strong>Set</strong>, Membership tracking</li>
-<li><strong>Map</strong>, Key-value storage</li>
-<li><strong>List</strong>, Ordered queue</li>
-<li><strong>MerkleTree</strong>, Membership proofs with a single root</li>
-<li><strong>HistoricMerkleTree</strong>, Membership proofs across time</li>
-</ul>
-<p>The choice matters because the on-chain representation affects what your circuits can prove.</p>
+<p>Control flow in Compact is constrained by design. No recursion, bounded loops only.</p>
 <hr>
-<h2 id="counter"><a class="header" href="#counter">Counter</a></h2>
-<p>A simple unsigned counter. The key advantage over <code>Cell&lt;Uint&lt;64&gt;&gt;</code> is that <code>Counter</code> does not read the current value when incrementing, so transactions are less likely to be rejected due to contention.</p>
-<pre><code class="language-compact">ledger votes: Counter;
-
-export circuit vote(): [] {
-  votes += 1;
-}
-
-export circuit retract(): [] {
-  votes -= 1;
-}
-
-export circuit getVotes(): Uint&lt;64&gt; {
-  return votes;
+<h2 id="conditionals"><a class="header" href="#conditionals">Conditionals</a></h2>
+<h3 id="ifelse"><a class="header" href="#ifelse">if/else</a></h3>
+<pre><code class="language-compact">if (condition) {
+  // then branch
+} else {
+  // else branch
 }
 </code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Increment</td><td><code>field += n</code></td><td>Add <code>n</code>, no read required</td></tr>
-<tr><td>Decrement</td><td><code>field -= n</code></td><td>Subtract <code>n</code>, errors if negative</td></tr>
-<tr><td>Read</td><td><code>field</code></td><td>Returns as <code>Uint&lt;64&gt;</code></td></tr>
-<tr><td>Compare</td><td><code>field.lessThan(n)</code></td><td>Returns <code>Boolean</code></td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Why low contention?</strong> A normal <code>Uint&lt;64&gt;</code> read-modify-write has three steps: read the value, add one, write back. Under concurrent calls, two transactions might read the same value and both write the same new value. <code>Counter</code> combines these steps atomically.</p>
-<hr>
-<h2 id="cell-plain-types"><a class="header" href="#cell-plain-types">Cell (Plain Types)</a></h2>
-<p>When you declare <code>ledger f: T</code> without a collection type, it’s implicitly a <code>Cell&lt;T&gt;</code>. Read and write operations use shorthand.</p>
-<pre><code class="language-compact">ledger owner: Bytes&lt;32&gt;;
-
-export circuit setOwner(addr: Bytes&lt;32&gt;): [] {
-  owner = disclose(addr);  // shorthand for owner.write(...)
-}
-
-export circuit getOwner(): Bytes&lt;32&gt; {
-  return owner;  // shorthand for owner.read()
+<h3 id="one-arm-if"><a class="header" href="#one-arm-if">One-arm if</a></h3>
+<pre><code class="language-compact">if (value &gt; 0) {
+  result = true;
 }
 </code></pre>
-<p><code>Cell&lt;T&gt;</code> is the default. Use it for single, mutable values.</p>
+<h3 id="no-else-if"><a class="header" href="#no-else-if">No else-if</a></h3>
+<pre><code class="language-compact">// wrong - not allowed
+if (x == 1) { } else if (x == 2) { }
+
+// correct
+if (x == 1) { } else { if (x == 2) { } }
+</code></pre>
 <hr>
-<h2 id="set"><a class="header" href="#set">Set</a></h2>
-<p>An unbounded set of unique values. Inserting a duplicate is a no-op.</p>
-<pre><code class="language-compact">ledger allowlist: Set&lt;Bytes&lt;32&gt;&gt;;
-
-export circuit addAddress(addr: Bytes&lt;32&gt;): [] {
-  allowlist.insert(disclose(addr));
-}
-
-export circuit isAllowed(addr: Bytes&lt;32&gt;): Boolean {
-  return allowlist.member(addr);
+<h2 id="assertions"><a class="header" href="#assertions">Assertions</a></h2>
+<pre><code class="language-compact">assert(condition, "error message");
+assert(value &gt; 0, "Must be positive");
+</code></pre>
+<hr>
+<h2 id="loops"><a class="header" href="#loops">Loops</a></h2>
+<h3 id="for-loop"><a class="header" href="#for-loop">For Loop</a></h3>
+<pre><code class="language-compact">for (const item of collection) {
+  // process item
 }
 </code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>set.insert(v)</code></td><td>Add value, duplicate is no-op</td></tr>
-<tr><td>Remove</td><td><code>set.remove(v)</code></td><td>Remove value</td></tr>
-<tr><td>Check</td><td><code>set.member(v)</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Empty check</td><td><code>set.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Size</td><td><code>set.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-<tr><td>Reset</td><td><code>set.resetToDefault()</code></td><td>Clears the set</td></tr>
-</tbody>
-</table>
-</div>
-<p>Useful for allowlists, denylists, and membership tracking.</p>
-<hr>
-<h2 id="map"><a class="header" href="#map">Map</a></h2>
-<p>An unbounded key-value mapping. Values can be other ledger-state types (except <code>Kernel</code>).</p>
-<pre><code class="language-compact">ledger balances: Map&lt;Bytes&lt;32&gt;, Uint&lt;64&gt;&gt;;
-
-export circuit setBalance(addr: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
-  balances.insert(disclose(addr), disclose(amount));
-}
-
-export circuit getBalance(addr: Bytes&lt;32&gt;): Uint&lt;64&gt; {
-  return balances.lookup(addr);
-}
+<p>Bound must be compile-time known.</p>
+<h3 id="fold"><a class="header" href="#fold">fold</a></h3>
+<pre><code class="language-compact">const sum = v.fold((acc, x) =&gt; acc + x, 0);
 </code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>map.insert(k, v)</code></td><td>Add or update key-value</td></tr>
-<tr><td>Lookup</td><td><code>map.lookup(k)</code></td><td>Returns value (errors if missing)</td></tr>
-<tr><td>Check</td><td><code>map.member(k)</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Remove</td><td><code>map.remove(k)</code></td><td>Delete key-value</td></tr>
-<tr><td>Empty check</td><td><code>map.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Size</td><td><code>map.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-</tbody>
-</table>
-</div>
-<h3 id="nested-maps"><a class="header" href="#nested-maps">Nested Maps</a></h3>
-<pre><code class="language-compact">ledger fld: Map&lt;Boolean, Map&lt;Field, Counter&gt;&gt;;
+<h3 id="no-while"><a class="header" href="#no-while">No while</a></h3>
+<p>While loops are not allowed.</p>
+<hr>
+<h2 id="return-in-loops"><a class="header" href="#return-in-loops">Return in Loops</a></h2>
+<p>Not allowed. Use fold instead:</p>
+<pre><code class="language-compact">// wrong
+for (const x of v) { if (x == target) return true; }
 
-export circuit increment(b: Boolean, n: Field, k: Uint&lt;16&gt;): [] {
-  fld.lookup(b).lookup(n) += disclose(k);
-}
+// correct
+return v.fold((found, x) =&gt; found || x == target, false, v);
 </code></pre>
-<p>Rules for nesting:</p>
-<ul>
-<li>Nested values must be initialized before first use.</li>
-<li>The entire indirection chain must be used in a single expression.</li>
-<li>Only <code>Map</code> values can contain ledger-state types.</li>
-<li><code>Kernel</code> cannot be nested.</li>
-</ul>
 <hr>
-<h2 id="list"><a class="header" href="#list">List</a></h2>
-<p>An unbounded ordered list. Elements are pushed and popped from the front.</p>
-<pre><code class="language-compact">ledger queue: List&lt;Field&gt;;
-
-export circuit enqueue(v: Field): [] {
-  queue.pushFront(disclose(v));
-}
-
-export circuit dequeue(): [] {
-  queue.popFront();
-}
-
-export circuit peek(): Field {
-  return queue.head().value;
-}
+<h2 id="common-patterns"><a class="header" href="#common-patterns">Common Patterns</a></h2>
+<h3 id="finding-an-element"><a class="header" href="#finding-an-element">Finding an element</a></h3>
+<pre><code class="language-compact">const found = v.fold((acc, x) =&gt; acc || x == target, false, v);
 </code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Push</td><td><code>list.pushFront(v)</code></td><td>Add to front</td></tr>
-<tr><td>Pop</td><td><code>list.popFront()</code></td><td>Remove from front</td></tr>
-<tr><td>Head</td><td><code>list.head()</code></td><td>Returns <code>Maybe&lt;T&gt;</code></td></tr>
-<tr><td>Empty check</td><td><code>list.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Length</td><td><code>list.length()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-</tbody>
-</table>
-</div>
-<p><code>head()</code> returns <code>Maybe&lt;T&gt;</code>, check <code>.isSome</code> before accessing <code>.value</code>.</p>
-<hr>
-<h2 id="merkletree"><a class="header" href="#merkletree">MerkleTree</a></h2>
-<p>A bounded Merkle tree of depth <code>n</code> (2 ≤ n ≤ 32). Use when you need to prove membership against the <strong>current</strong> root.</p>
-<pre><code class="language-compact">ledger members: MerkleTree&lt;8, Bytes&lt;32&gt;&gt;;
-
-export circuit addMember(leaf: Bytes&lt;32&gt;): [] {
-  members.insert(disclose(leaf));
-}
-
-export circuit checkMembership(root: MerkleTreeDigest): Boolean {
-  return members.checkRoot(root);
-}
+<h3 id="summing"><a class="header" href="#summing">Summing</a></h3>
+<pre><code class="language-compact">const total = v.fold((sum, x) =&gt; sum + x, 0n);
 </code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>merkle.insert(v)</code></td><td>Add leaf, update root</td></tr>
-<tr><td>Check</td><td><code>merkle.checkRoot(digest)</code></td><td>Verify leaf against current root</td></tr>
-<tr><td>Full check</td><td><code>merkle.isFull()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Root</td><td><code>merkle.root()</code></td><td>Read-only in TypeScript</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>What this enables:</strong> A compact proof that a value is a member of the set, without revealing the value or the full set. The proof is a Merkle path, a sequence of sibling hashes from the leaf to the root.</p>
-<p><strong>Use case:</strong> Prove you know a secret in a set without revealing the secret.</p>
-<hr>
-<h2 id="historicmerkletree"><a class="header" href="#historicmerkletree">HistoricMerkleTree</a></h2>
-<p>Like <code>MerkleTree</code> but retains past roots. Use when you need to prove membership against <strong>any past root</strong>.</p>
-<pre><code class="language-compact">ledger commitments: HistoricMerkleTree&lt;16, Bytes&lt;32&gt;&gt;;
-
-export circuit addCommitment(leaf: Bytes&lt;32&gt;): [] {
-  commitments.insert(disclose(leaf));
-}
-
-export circuit verifyOldMembership(root: MerkleTreeDigest): Boolean {
-  return commitments.checkRoot(root);  // accepts any past root
-}
+<h3 id="maximum"><a class="header" href="#maximum">Maximum</a></h3>
+<pre><code class="language-compact">const max = v.fold((m, x) =&gt; x &gt; m ? x : m, default&lt;Field&gt;());
 </code></pre>
-<p><strong>What this enables:</strong> Proving that a commitment existed at a past point in time. Useful for nullifier-based systems where you need to prevent double-spending.</p>
-<hr>
-<h2 id="kernel"><a class="header" href="#kernel">Kernel</a></h2>
-<p>A special ledger-state type that provides access to built-in ledger operations.</p>
-<pre><code class="language-compact">ledger kern: Kernel;
-
-export circuit checkTime(deadline: Uint&lt;64&gt;): Boolean {
-  return kern.blockTimeLessThan(deadline);
-}
-
-export circuit selfAddress(): ContractAddress {
-  return kern.self();
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td><code>kern.self()</code></td><td>Returns this contract’s address</td></tr>
-<tr><td><code>kern.blockTimeLessThan(t)</code></td><td>Check time against deadline</td></tr>
-<tr><td><code>kern.balance()</code></td><td>Check native token balance</td></tr>
-<tr><td><code>kern.mintShielded(...)</code></td><td>Mint shielded tokens</td></tr>
-<tr><td><code>kern.mintUnshielded(...)</code></td><td>Mint unshielded tokens</td></tr>
-<tr><td><code>kern.checkpoint()</code></td><td>Create a checkpoint for upgrades</td></tr>
-</tbody>
-</table>
-</div>
-<p><code>Kernel</code> cannot be nested in a <code>Map</code>.</p>
-<hr>
-<h2 id="choosing-the-right-adt"><a class="header" href="#choosing-the-right-adt">Choosing the Right ADT</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th><th>Why</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>Cell&lt;T&gt;</code></td><td>Simple, direct access</td></tr>
-<tr><td>Atomic counter (low contention)</td><td><code>Counter</code></td><td>Increment without read</td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td><td>O(1) insert, check, remove</td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td><td>Key-value with O(1) lookup</td></tr>
-<tr><td>Nested per-key storage</td><td><code>Map&lt;K, Map&lt;K2, V&gt;&gt;</code></td><td>Two-level lookup</td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td><td>Push/pop from front</td></tr>
-<tr><td>Current membership proof</td><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Single-root membership</td></tr>
-<tr><td>Historical membership proof</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Multi-root membership</td></tr>
-<tr><td>Block time, tokens, address</td><td><code>Kernel</code></td><td>Built-in operations</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
-<ol>
-<li>
-<p><strong>Using <code>Map</code> when <code>Set</code> suffices.</strong> If you only need membership check, use <code>Set</code>. <code>Map</code> has more overhead for the value storage.</p>
-</li>
-<li>
-<p><strong>Forgetting that <code>List</code> pushes from front.</strong> <code>pushFront</code> adds to the front, <code>popFront</code> removes from the front. This is a stack, not a queue, the name reflects the storage order, not the access pattern.</p>
-</li>
-<li>
-<p><strong>Not initializing nested values.</strong> Before accessing <code>map.lookup(k).lookup(k2)</code>, the inner <code>Map</code> for <code>k</code> must exist. The compiler requires the entire chain in one expression.</p>
-</li>
-<li>
-<p><strong>Using <code>MerkleTree</code> when you need historical proofs.</strong> <code>MerkleTree</code> only proves against the current root. If you need past roots, use <code>HistoricMerkleTree</code>.</p>
-</li>
-<li>
-<p><strong>Nesting <code>Kernel</code> in <code>Map</code>.</strong> Not allowed. <code>Kernel</code> is a special type with built-in operations, it cannot be nested.</p>
-</li>
-</ol>
-<hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>ADT</th><th>Solidity equivalent</th><th>Note</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Cell&lt;T&gt;</code></td><td><code>uint256</code></td><td>Simple storage slot</td></tr>
-<tr><td><code>Counter</code></td><td>N/A</td><td>Atomic increment</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td><code>mapping → bool</code></td><td>Unique membership</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td><code>mapping(K ⇒ V)</code></td><td>Key-value</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td><code>uint256[]</code></td><td>Ordered with overhead</td></tr>
-<tr><td><code>MerkleTree</code></td><td>N/A</td><td>ZK-native, not Solidity-native</td></tr>
-<tr><td><code>Kernel</code></td><td>built-in</td><td>Block time, tokens</td></tr>
-</tbody>
-</table>
-</div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li><strong>Counter</strong>, Low contention, atomic increment without read.</li>
-<li><strong>Cell</strong>, Default for single values. Read/write shorthand.</li>
-<li><strong>Set</strong>, Membership tracking, unique values.</li>
-<li><strong>Map</strong>, Key-value with nested ledger types.</li>
-<li><strong>List</strong>, Ordered stack, push/pop from front.</li>
-<li><strong>MerkleTree</strong>, Current-root membership proofs.</li>
-<li><strong>HistoricMerkleTree</strong>, Any-past-root membership proofs.</li>
-<li><strong>Kernel</strong>, Built-in operations (time, tokens, address). Cannot be nested.</li>
-<li>Choose based on access patterns. The ADT affects what your circuits can prove.</li>
+<li>if/else allowed, no else-if</li>
+<li>assert is your runtime check</li>
+<li>for loops must have compile-time bounds</li>
+<li>Use fold for early returns</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-08.html">Data Types</a>  Type system</li>
-<li><strong>Next:</strong> <a href="./chapter-10.html">Standard Library</a>  Hashing and token functions</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment patterns</li>
-<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Merkle tree functions</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-08.html">Data Types</a></li>
+<li><strong>Next:</strong> <a href="./chapter-07.html">Circuits</a></li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-21.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-08.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-13.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapters/chapter-07.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -516,11 +274,11 @@ export circuit selfAddress(): ContractAddress {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-21.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-08.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-13.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapters/chapter-07.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

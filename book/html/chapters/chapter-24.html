@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger ADTs - Compact Book</title>
+        <title>TypeScript Integration - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -174,339 +174,238 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-adts"><a class="header" href="#ledger-adts">Ledger ADTs</a></h1>
-<p>This note covers the collection types available for on-chain state, when to use each and the tradeoffs.</p>
+                        <h1 id="typescript-integration"><a class="header" href="#typescript-integration">TypeScript Integration</a></h1>
+<p>This note covers how to use your compiled Compact contract from TypeScript, implement witnesses, and interact with the Midnight SDK.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/writing">Writing a Contract</a> · <a href="https://docs.midnight.network/sdks">SDK</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>Ledger ADTs are the data structures you use for on-chain state. They’re not like in-memory data structures in TypeScript, they’re persistent, on-chain, and their operations produce verifiable state transitions.</p>
-<p>Each type optimizes for a specific access pattern:</p>
-<ul>
-<li><strong>Counter</strong>, Low-contention atomic counters</li>
-<li><strong>Set</strong>, Membership tracking</li>
-<li><strong>Map</strong>, Key-value storage</li>
-<li><strong>List</strong>, Ordered queue</li>
-<li><strong>MerkleTree</strong>, Membership proofs with a single root</li>
-<li><strong>HistoricMerkleTree</strong>, Membership proofs across time</li>
-</ul>
-<p>The choice matters because the on-chain representation affects what your circuits can prove.</p>
-<hr>
-<h2 id="counter"><a class="header" href="#counter">Counter</a></h2>
-<p>A simple unsigned counter. The key advantage over <code>Cell&lt;Uint&lt;64&gt;&gt;</code> is that <code>Counter</code> does not read the current value when incrementing, so transactions are less likely to be rejected due to contention.</p>
-<pre><code class="language-compact">ledger votes: Counter;
-
-export circuit vote(): [] {
-  votes += 1;
-}
-
-export circuit retract(): [] {
-  votes -= 1;
-}
-
-export circuit getVotes(): Uint&lt;64&gt; {
-  return votes;
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Increment</td><td><code>field += n</code></td><td>Add <code>n</code>, no read required</td></tr>
-<tr><td>Decrement</td><td><code>field -= n</code></td><td>Subtract <code>n</code>, errors if negative</td></tr>
-<tr><td>Read</td><td><code>field</code></td><td>Returns as <code>Uint&lt;64&gt;</code></td></tr>
-<tr><td>Compare</td><td><code>field.lessThan(n)</code></td><td>Returns <code>Boolean</code></td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Why low contention?</strong> A normal <code>Uint&lt;64&gt;</code> read-modify-write has three steps: read the value, add one, write back. Under concurrent calls, two transactions might read the same value and both write the same new value. <code>Counter</code> combines these steps atomically.</p>
-<hr>
-<h2 id="cell-plain-types"><a class="header" href="#cell-plain-types">Cell (Plain Types)</a></h2>
-<p>When you declare <code>ledger f: T</code> without a collection type, it’s implicitly a <code>Cell&lt;T&gt;</code>. Read and write operations use shorthand.</p>
-<pre><code class="language-compact">ledger owner: Bytes&lt;32&gt;;
-
-export circuit setOwner(addr: Bytes&lt;32&gt;): [] {
-  owner = disclose(addr);  // shorthand for owner.write(...)
-}
-
-export circuit getOwner(): Bytes&lt;32&gt; {
-  return owner;  // shorthand for owner.read()
-}
-</code></pre>
-<p><code>Cell&lt;T&gt;</code> is the default. Use it for single, mutable values.</p>
-<hr>
-<h2 id="set"><a class="header" href="#set">Set</a></h2>
-<p>An unbounded set of unique values. Inserting a duplicate is a no-op.</p>
-<pre><code class="language-compact">ledger allowlist: Set&lt;Bytes&lt;32&gt;&gt;;
-
-export circuit addAddress(addr: Bytes&lt;32&gt;): [] {
-  allowlist.insert(disclose(addr));
-}
-
-export circuit isAllowed(addr: Bytes&lt;32&gt;): Boolean {
-  return allowlist.member(addr);
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>set.insert(v)</code></td><td>Add value, duplicate is no-op</td></tr>
-<tr><td>Remove</td><td><code>set.remove(v)</code></td><td>Remove value</td></tr>
-<tr><td>Check</td><td><code>set.member(v)</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Empty check</td><td><code>set.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Size</td><td><code>set.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-<tr><td>Reset</td><td><code>set.resetToDefault()</code></td><td>Clears the set</td></tr>
-</tbody>
-</table>
-</div>
-<p>Useful for allowlists, denylists, and membership tracking.</p>
-<hr>
-<h2 id="map"><a class="header" href="#map">Map</a></h2>
-<p>An unbounded key-value mapping. Values can be other ledger-state types (except <code>Kernel</code>).</p>
-<pre><code class="language-compact">ledger balances: Map&lt;Bytes&lt;32&gt;, Uint&lt;64&gt;&gt;;
-
-export circuit setBalance(addr: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
-  balances.insert(disclose(addr), disclose(amount));
-}
-
-export circuit getBalance(addr: Bytes&lt;32&gt;): Uint&lt;64&gt; {
-  return balances.lookup(addr);
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>map.insert(k, v)</code></td><td>Add or update key-value</td></tr>
-<tr><td>Lookup</td><td><code>map.lookup(k)</code></td><td>Returns value (errors if missing)</td></tr>
-<tr><td>Check</td><td><code>map.member(k)</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Remove</td><td><code>map.remove(k)</code></td><td>Delete key-value</td></tr>
-<tr><td>Empty check</td><td><code>map.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Size</td><td><code>map.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-</tbody>
-</table>
-</div>
-<h3 id="nested-maps"><a class="header" href="#nested-maps">Nested Maps</a></h3>
-<pre><code class="language-compact">ledger fld: Map&lt;Boolean, Map&lt;Field, Counter&gt;&gt;;
-
-export circuit increment(b: Boolean, n: Field, k: Uint&lt;16&gt;): [] {
-  fld.lookup(b).lookup(n) += disclose(k);
-}
-</code></pre>
-<p>Rules for nesting:</p>
-<ul>
-<li>Nested values must be initialized before first use.</li>
-<li>The entire indirection chain must be used in a single expression.</li>
-<li>Only <code>Map</code> values can contain ledger-state types.</li>
-<li><code>Kernel</code> cannot be nested.</li>
-</ul>
-<hr>
-<h2 id="list"><a class="header" href="#list">List</a></h2>
-<p>An unbounded ordered list. Elements are pushed and popped from the front.</p>
-<pre><code class="language-compact">ledger queue: List&lt;Field&gt;;
-
-export circuit enqueue(v: Field): [] {
-  queue.pushFront(disclose(v));
-}
-
-export circuit dequeue(): [] {
-  queue.popFront();
-}
-
-export circuit peek(): Field {
-  return queue.head().value;
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Push</td><td><code>list.pushFront(v)</code></td><td>Add to front</td></tr>
-<tr><td>Pop</td><td><code>list.popFront()</code></td><td>Remove from front</td></tr>
-<tr><td>Head</td><td><code>list.head()</code></td><td>Returns <code>Maybe&lt;T&gt;</code></td></tr>
-<tr><td>Empty check</td><td><code>list.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Length</td><td><code>list.length()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
-</tbody>
-</table>
-</div>
-<p><code>head()</code> returns <code>Maybe&lt;T&gt;</code>, check <code>.isSome</code> before accessing <code>.value</code>.</p>
-<hr>
-<h2 id="merkletree"><a class="header" href="#merkletree">MerkleTree</a></h2>
-<p>A bounded Merkle tree of depth <code>n</code> (2 ≤ n ≤ 32). Use when you need to prove membership against the <strong>current</strong> root.</p>
-<pre><code class="language-compact">ledger members: MerkleTree&lt;8, Bytes&lt;32&gt;&gt;;
-
-export circuit addMember(leaf: Bytes&lt;32&gt;): [] {
-  members.insert(disclose(leaf));
-}
-
-export circuit checkMembership(root: MerkleTreeDigest): Boolean {
-  return members.checkRoot(root);
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td>Insert</td><td><code>merkle.insert(v)</code></td><td>Add leaf, update root</td></tr>
-<tr><td>Check</td><td><code>merkle.checkRoot(digest)</code></td><td>Verify leaf against current root</td></tr>
-<tr><td>Full check</td><td><code>merkle.isFull()</code></td><td>Returns <code>Boolean</code></td></tr>
-<tr><td>Root</td><td><code>merkle.root()</code></td><td>Read-only in TypeScript</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>What this enables:</strong> A compact proof that a value is a member of the set, without revealing the value or the full set. The proof is a Merkle path, a sequence of sibling hashes from the leaf to the root.</p>
-<p><strong>Use case:</strong> Prove you know a secret in a set without revealing the secret.</p>
-<hr>
-<h2 id="historicmerkletree"><a class="header" href="#historicmerkletree">HistoricMerkleTree</a></h2>
-<p>Like <code>MerkleTree</code> but retains past roots. Use when you need to prove membership against <strong>any past root</strong>.</p>
-<pre><code class="language-compact">ledger commitments: HistoricMerkleTree&lt;16, Bytes&lt;32&gt;&gt;;
-
-export circuit addCommitment(leaf: Bytes&lt;32&gt;): [] {
-  commitments.insert(disclose(leaf));
-}
-
-export circuit verifyOldMembership(root: MerkleTreeDigest): Boolean {
-  return commitments.checkRoot(root);  // accepts any past root
-}
-</code></pre>
-<p><strong>What this enables:</strong> Proving that a commitment existed at a past point in time. Useful for nullifier-based systems where you need to prevent double-spending.</p>
-<hr>
-<h2 id="kernel"><a class="header" href="#kernel">Kernel</a></h2>
-<p>A special ledger-state type that provides access to built-in ledger operations.</p>
-<pre><code class="language-compact">ledger kern: Kernel;
-
-export circuit checkTime(deadline: Uint&lt;64&gt;): Boolean {
-  return kern.blockTimeLessThan(deadline);
-}
-
-export circuit selfAddress(): ContractAddress {
-  return kern.self();
-}
-</code></pre>
-<p>Operations:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td><code>kern.self()</code></td><td>Returns this contract’s address</td></tr>
-<tr><td><code>kern.blockTimeLessThan(t)</code></td><td>Check time against deadline</td></tr>
-<tr><td><code>kern.balance()</code></td><td>Check native token balance</td></tr>
-<tr><td><code>kern.mintShielded(...)</code></td><td>Mint shielded tokens</td></tr>
-<tr><td><code>kern.mintUnshielded(...)</code></td><td>Mint unshielded tokens</td></tr>
-<tr><td><code>kern.checkpoint()</code></td><td>Create a checkpoint for upgrades</td></tr>
-</tbody>
-</table>
-</div>
-<p><code>Kernel</code> cannot be nested in a <code>Map</code>.</p>
-<hr>
-<h2 id="choosing-the-right-adt"><a class="header" href="#choosing-the-right-adt">Choosing the Right ADT</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th><th>Why</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>Cell&lt;T&gt;</code></td><td>Simple, direct access</td></tr>
-<tr><td>Atomic counter (low contention)</td><td><code>Counter</code></td><td>Increment without read</td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td><td>O(1) insert, check, remove</td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td><td>Key-value with O(1) lookup</td></tr>
-<tr><td>Nested per-key storage</td><td><code>Map&lt;K, Map&lt;K2, V&gt;&gt;</code></td><td>Two-level lookup</td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td><td>Push/pop from front</td></tr>
-<tr><td>Current membership proof</td><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Single-root membership</td></tr>
-<tr><td>Historical membership proof</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Multi-root membership</td></tr>
-<tr><td>Block time, tokens, address</td><td><code>Kernel</code></td><td>Built-in operations</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
+<p>When you compile a Compact contract, you get TypeScript output. This output is your DApp’s interface to the contract.</p>
+<p>Three things happen on the TypeScript side:</p>
 <ol>
-<li>
-<p><strong>Using <code>Map</code> when <code>Set</code> suffices.</strong> If you only need membership check, use <code>Set</code>. <code>Map</code> has more overhead for the value storage.</p>
-</li>
-<li>
-<p><strong>Forgetting that <code>List</code> pushes from front.</strong> <code>pushFront</code> adds to the front, <code>popFront</code> removes from the front. This is a stack, not a queue, the name reflects the storage order, not the access pattern.</p>
-</li>
-<li>
-<p><strong>Not initializing nested values.</strong> Before accessing <code>map.lookup(k).lookup(k2)</code>, the inner <code>Map</code> for <code>k</code> must exist. The compiler requires the entire chain in one expression.</p>
-</li>
-<li>
-<p><strong>Using <code>MerkleTree</code> when you need historical proofs.</strong> <code>MerkleTree</code> only proves against the current root. If you need past roots, use <code>HistoricMerkleTree</code>.</p>
-</li>
-<li>
-<p><strong>Nesting <code>Kernel</code> in <code>Map</code>.</strong> Not allowed. <code>Kernel</code> is a special type with built-in operations, it cannot be nested.</p>
-</li>
+<li><strong>Witness implementations</strong>, You provide the callback bodies for witnesses</li>
+<li><strong>Circuit calls</strong>, You call circuits through the generated API</li>
+<li><strong>State reads</strong>, You read ledger state to display to users</li>
 </ol>
 <hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>ADT</th><th>Solidity equivalent</th><th>Note</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Cell&lt;T&gt;</code></td><td><code>uint256</code></td><td>Simple storage slot</td></tr>
-<tr><td><code>Counter</code></td><td>N/A</td><td>Atomic increment</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td><code>mapping → bool</code></td><td>Unique membership</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td><code>mapping(K ⇒ V)</code></td><td>Key-value</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td><code>uint256[]</code></td><td>Ordered with overhead</td></tr>
-<tr><td><code>MerkleTree</code></td><td>N/A</td><td>ZK-native, not Solidity-native</td></tr>
-<tr><td><code>Kernel</code></td><td>built-in</td><td>Block time, tokens</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="the-compiled-output"><a class="header" href="#the-compiled-output">The Compiled Output</a></h2>
+<p>After compiling, you get:</p>
+<pre><code>contracts/managed/myContract/
+├── contract/
+│   ├── index.js          # Main API
+│   ├── index.d.ts      # Type definitions
+│   └── index.js.map   # Source map
+├── compiler/
+│   └── contract-info.json
+├── zkir/
+│   └── *.zkir
+└── keys/
+    ├── *.prover
+    └── *.verifier
+</code></pre>
+<h3 id="the-contract-api"><a class="header" href="#the-contract-api">The Contract API</a></h3>
+<pre><code class="language-typescript">import { myContract } from './contract';
+
+const contract = new myContract(witnesses);
+
+// Call a circuit
+const tx = await contract.callTx.mint(metadataHash);
+
+// Read state
+const totalSupply = contract.state.totalSupply;
+</code></pre>
+<hr>
+<h2 id="implementing-witnesses"><a class="header" href="#implementing-witnesses">Implementing Witnesses</a></h2>
+<p>Witnesses are the bridge between your Compact contract and private user data.</p>
+<h3 id="in-compact-declaration"><a class="header" href="#in-compact-declaration">In Compact (declaration)</a></h3>
+<pre><code class="language-compact">witness callerAddress(): Bytes&lt;32&gt;;
+witness secretKey(): Bytes&lt;32&gt;;
+</code></pre>
+<h3 id="in-typescript-implementation"><a class="header" href="#in-typescript-implementation">In TypeScript (implementation)</a></h3>
+<pre><code class="language-typescript">import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
+import { createWallet, createProviders } from './utils';
+
+const SEED = process.env.WALLET_SEED;
+
+async function main() {
+  const wallet = await createWallet(SEED);
+  const providers = await createProviders(wallet);
+
+  const contract = await findDeployedContract(providers, {
+    contractAddress: 'addr...',
+    compiledContract: await getCompiled('contract'),
+  });
+
+  // Implement witnesses
+  const witnesses = {
+    callerAddress: () =&gt; {
+      // Get the caller's derived address
+      return derivedAddress(wallet);
+    },
+    secretKey: () =&gt; {
+      // Get secret key for signing (never goes on-chain)
+      return wallet.secretKey;
+    },
+  };
+
+  // Call circuit with witnesses
+  const tx = await contract.circuits.transfer(
+    { context: providers },
+    tokenId,
+    newOwner,
+    tokenMetaHash
+  );
+}
+</code></pre>
+<h3 id="witness-context"><a class="header" href="#witness-context">Witness Context</a></h3>
+<pre><code class="language-typescript">interface WitnessContext {
+  transactionId: string;
+  proposer: Uint8Array;
+  nonce: bigint;
+}
+</code></pre>
+<hr>
+<h2 id="circuit-invocation"><a class="header" href="#circuit-invocation">Circuit Invocation</a></h2>
+<h3 id="impure-circuits"><a class="header" href="#impure-circuits">Impure Circuits</a></h3>
+<p>These access ledger state:</p>
+<pre><code class="language-typescript">// Get context from providers
+const context = await providers.midnight();
+
+const result = await contract.circuits.mint(context, metadataHash);
+
+console.log('Transaction:', result.transactionId);
+</code></pre>
+<h3 id="pure-circuits"><a class="header" href="#pure-circuits">Pure Circuits</a></h3>
+<p>These don’t access ledger state:</p>
+<pre><code class="language-typescript">// Pure circuits don't need context
+const hash = contract.circuits.hashData(data);
+
+console.log('Hash:', hash);
+</code></pre>
+<h3 id="return-values"><a class="header" href="#return-values">Return Values</a></h3>
+<pre><code class="language-typescript">const result = await contract.circuits.getValue(context);
+
+console.log(result.value);  // The returned value
+</code></pre>
+<hr>
+<h2 id="reading-ledger-state"><a class="header" href="#reading-ledger-state">Reading Ledger State</a></h2>
+<h3 id="simple-fields"><a class="header" href="#simple-fields">Simple Fields</a></h3>
+<pre><code class="language-typescript">const state = contract.state;
+
+console.log('Total supply:', state.totalSupply);
+console.log('Owner:', state.owner);
+</code></pre>
+<h3 id="maps"><a class="header" href="#maps">Maps</a></h3>
+<pre><code class="language-typescript">// Check membership
+const hasKey = state.tokenCommitments.member(tokenId);
+
+// Get value
+const commitment = state.tokenCommitments.lookup(tokenId);
+
+// Get root (MerkleTree)
+const root = state.merkleTree.root();
+</code></pre>
+<h3 id="counters"><a class="header" href="#counters">Counters</a></h3>
+<pre><code class="language-typescript">const count = state.counter.value();
+</code></pre>
+<hr>
+<h2 id="sdk-usage"><a class="header" href="#sdk-usage">SDK Usage</a></h2>
+<h3 id="installation"><a class="header" href="#installation">Installation</a></h3>
+<pre><code class="language-bash">npm install @midnight-ntwrk/midnight-js-contracts @midnight-ntwrk/midnight-js-sdk
+</code></pre>
+<h3 id="basic-setup"><a class="header" href="#basic-setup">Basic Setup</a></h3>
+<pre><code class="language-typescript">import {
+  createWallet,
+  createProviders,
+  findDeployedContract,
+} from '@midnight-ntwrk/midnight-js-contracts';
+
+async function setup() {
+  // Create wallet from seed
+  const wallet = createWallet('your-seed-phrase');
+
+  // Create providers (connects to chain)
+  const providers = await createProviders(wallet);
+
+  return { wallet, providers };
+}
+</code></pre>
+<h3 id="deployment"><a class="header" href="#deployment">Deployment</a></h3>
+<pre><code class="language-typescript">import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
+
+async function deploy(providers, initialState) {
+  const contract = await deployContract(providers, {
+    initialState,
+    compiledContract: await getCompiled('contract'),
+  });
+
+  console.log('Deployed at:', contract.address);
+  return contract;
+}
+</code></pre>
+<hr>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
+<pre><code class="language-typescript">try {
+  const tx = await contract.circuits.mint(context, metadataHash);
+} catch (error) {
+  if (error.message.includes('Assertion failed')) {
+    console.log('Circuit assertion failed');
+  } else if (error.message.includes('Insufficient balance')) {
+    console.log('Not enough tokens');
+  } else {
+    throw error;
+  }
+}
+</code></pre>
+<hr>
+<h2 id="type-definitions"><a class="header" href="#type-definitions">Type Definitions</a></h2>
+<p>The <code>.d.ts</code> file tells you what’s available:</p>
+<pre><code class="language-typescript">export interface CircuitResults&lt;PS, Returns&gt; {
+  state: PS;           // Post-state
+  returns: Returns;   // Return values
+}
+
+export interface Witnesses {
+  callerAddress(context: WitnessContext): [PS, Uint8Array];
+  secretKey(context: WitnessContext): [PS, Uint8Array];
+}
+
+export interface Ledger {
+  readonly totalSupply: bigint;
+  readonly owner: Uint8Array;
+  tokenCommitments: {
+    member(key: bigint): boolean;
+    lookup(key: bigint): Uint8Array;
+  };
+}
+</code></pre>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li><strong>Counter</strong>, Low contention, atomic increment without read.</li>
-<li><strong>Cell</strong>, Default for single values. Read/write shorthand.</li>
-<li><strong>Set</strong>, Membership tracking, unique values.</li>
-<li><strong>Map</strong>, Key-value with nested ledger types.</li>
-<li><strong>List</strong>, Ordered stack, push/pop from front.</li>
-<li><strong>MerkleTree</strong>, Current-root membership proofs.</li>
-<li><strong>HistoricMerkleTree</strong>, Any-past-root membership proofs.</li>
-<li><strong>Kernel</strong>, Built-in operations (time, tokens, address). Cannot be nested.</li>
-<li>Choose based on access patterns. The ADT affects what your circuits can prove.</li>
+<li>Compile produces TypeScript bindings in <code>contract/</code></li>
+<li>Witnesses are implemented in TypeScript, declared in Compact</li>
+<li>Call circuits via <code>contract.circuits.method(context, args)</code></li>
+<li>Read state via <code>contract.state.field</code></li>
+<li>Use SDK for wallet and deployment</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-08.html">Data Types</a>  Type system</li>
-<li><strong>Next:</strong> <a href="./chapter-10.html">Standard Library</a>  Hashing and token functions</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment patterns</li>
-<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Merkle tree functions</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-14.html">Writing A Contract</a>  Contract structure</li>
+<li><strong>Next:</strong> <a href="./chapter-16.html">Constructors</a>  Contract initialization</li>
+<li><strong>See also:</strong> <a href="./chapter-17.html">Testing and Debugging</a>  Troubleshooting</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-21.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-14.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-13.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapters/chapter-16.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -516,11 +415,11 @@ export circuit selfAddress(): ContractAddress {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-21.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-14.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-13.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapters/chapter-16.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

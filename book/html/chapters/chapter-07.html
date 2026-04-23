@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Data Types - Compact Book</title>
+        <title>Circuits - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
+            window.path_to_searchindex_js = "../searchindex-4bec0dfc.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-5dc002d3.js"></script>
+        <script src="../toc-728c2333.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,184 +174,190 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="data-types"><a class="header" href="#data-types">Data Types</a></h1>
-<p>This note covers Compact’s type system, primitives, composites, and program-defined types.</p>
+                        <h1 id="circuits"><a class="header" href="#circuits">Circuits</a></h1>
+<p>This note explains circuits, the operational unit of Compact, and why they’re fundamentally different from regular functions.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#compact-types">Compact Types</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact">08.01 Primitives</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact">08.02 Composites</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#circuit-definitions">Circuit Definitions</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>Compact is statically and strongly typed. Every expression has a type known at compile time. All types have fixed sizes at compile time. No <code>any</code>, no implicit <code>undefined</code>, no guessing.</p>
-<p>The type system serves two purposes in Compact:</p>
-<ol>
-<li><strong>Normal type checking</strong>, catching mismatches before runtime.</li>
-<li><strong>Privacy enforcement</strong>, the compiler tracks which types contain witness data, and where that data can flow.</li>
-</ol>
-<p>Strong typing is what makes privacy enforcement possible. If types were loose, the compiler couldn’t track data flow.</p>
+<p>A circuit is not a function. A function takes inputs, executes statements in sequence, and returns an output. A circuit declares constraints on inputs that must hold true.</p>
+<p>This distinction matters. When you write <code>return a + b</code>, you’re not “computing” a + b, you’re asserting that the output equals a + b. The proof proves this relationship held for the given inputs.</p>
+<p>Circuits are the language of constraints. Functions are the language of computation. Compact uses constraints because that’s what ZK proofs verify.</p>
 <hr>
-<h2 id="primitive-types"><a class="header" href="#primitive-types">Primitive Types</a></h2>
-<h3 id="boolean"><a class="header" href="#boolean">Boolean</a></h3>
-<pre><code class="language-compact">const flag: Boolean = true;
-const other = false;
-</code></pre>
-<p>Two values: <code>true</code> and <code>false</code>. No truthy/falsy conversion, must be explicit.</p>
-<h3 id="field"><a class="header" href="#field">Field</a></h3>
-<p>The set of unsigned integers up to the order of the native prime field. Values in a Field can only be compared with <code>==</code> and <code>!=</code>, not with <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>.</p>
-<pre><code class="language-compact">const f: Field = 42;
-const g = 0xdeadbeef as Field;  // large literals must be cast
-</code></pre>
-<p><strong>Why no comparison?</strong> Field arithmetic is modulo a prime. <code>&lt;</code> comparisons in that space don’t behave like integer comparisons. Use bounded types (<code>Uint&lt;0..n&gt;</code>) if you need comparisons.</p>
-<h3 id="uintn-sized-integer"><a class="header" href="#uintn-sized-integer">Uint&lt;n&gt;: Sized Integer</a></h3>
-<p>A fixed-width unsigned integer. Exactly <code>n</code> bits.</p>
-<pre><code class="language-compact">const x: Uint&lt;8&gt; = 255;     // 0 to 255
-const y: Uint&lt;64&gt; = 1000000;
-</code></pre>
-<p>Overflow wraps. <code>Uint&lt;8&gt;(255) + Uint&lt;8&gt;(1) == 0</code>.</p>
-<h3 id="uint0n-bounded-integer"><a class="header" href="#uint0n-bounded-integer">Uint&lt;0..n&gt;: Bounded Integer</a></h3>
-<p>An unsigned integer with an explicit range. Values outside the range are rejected at compile time.</p>
-<pre><code class="language-compact">const age: Uint&lt;0..150&gt; = 25;   // 0 to 149
-const idx: Uint&lt;0..256&gt; = 100;  // 0 to 255
-</code></pre>
-<p><code>Uint&lt;0..n&gt;</code> is a subtype of <code>Uint&lt;0..m&gt;</code> if <code>n ≤ m</code>.</p>
-<h3 id="bytesn"><a class="header" href="#bytesn">Bytes&lt;n&gt;</a></h3>
-<p>Exactly <code>n</code> bytes. Used for hashing, keys, identifiers.</p>
-<pre><code class="language-compact">const key: Bytes&lt;32&gt; = pad(32, "midnight:example:key");
-const hash: Bytes&lt;32&gt; = persistentHash&lt;Field&gt;(42);
-</code></pre>
-<p>Fixed length. Padding fills with zeros if the input is short.</p>
-<h3 id="opaque"><a class="header" href="#opaque">Opaque</a></h3>
-<p>Allows foreign JavaScript data to pass through without inspection by Compact code. Circuits see only a hash.</p>
-<pre><code class="language-compact">witness getMessage(): Opaque&lt;"string"&gt;;
-export ledger message: Opaque&lt;"string"&gt;;
-
-export circuit post(): [] {
-  message = disclose(getMessage());
-}
-</code></pre>
-<p>Circuits cannot inspect the contents, they can only store and retrieve the value. The value is opaque to Compact but transparent in TypeScript.</p>
-<p><strong>Important:</strong> Opaque values are not hidden on-chain. They’re plaintext, just not directly readable by circuits.</p>
-<hr>
-<h2 id="composite-types"><a class="header" href="#composite-types">Composite Types</a></h2>
-<h3 id="tuples-t1-t2--tn"><a class="header" href="#tuples-t1-t2--tn">Tuples [T1, T2, …, Tn]</a></h3>
-<p>Fixed-length, heterogeneous, positional.</p>
-<pre><code class="language-compact">const pair: [Field, Boolean] = [42, true];
-const first = pair[0];   // Field
-const second = pair[1];  // Boolean
-</code></pre>
-<p>Access by index. Types must match exactly.</p>
-<h3 id="vectorn-t"><a class="header" href="#vectorn-t">Vector&lt;n, T&gt;</a></h3>
-<p>Homogeneous fixed-length sequence.</p>
-<pre><code class="language-compact">const v: Vector&lt;4, Uint&lt;8&gt;&gt; = [1, 2, 3, 4];
-const w = [10, 20, 30];  // inferred as Vector&lt;3, ...&gt;
-</code></pre>
-<p>Use <code>map</code> and <code>fold</code> for transformations.</p>
-<hr>
-<h2 id="program-defined-types"><a class="header" href="#program-defined-types">Program-Defined Types</a></h2>
-<h3 id="struct"><a class="header" href="#struct">struct</a></h3>
-<p>Named collection of fields. Nominal typing, two structs with the same shape but different names are different types.</p>
-<pre><code class="language-compact">struct Point {
-  x: Uint&lt;32&gt;,
-  y: Uint&lt;32&gt;,
-}
-
-const p = Point { x: 10, y: 20 };
-const xVal = p.x;
-</code></pre>
-<p>Structs cannot be recursive.</p>
-<h3 id="enum"><a class="header" href="#enum">enum</a></h3>
-<p>Named set of variants. The first variant is the default value.</p>
-<pre><code class="language-compact">enum Direction { up, down, left, right }
-enum State { UNSET, SET }
-
-const d = Direction.up;
-const s = State.SET;
-</code></pre>
-<p>Useful for state machines and finite domains.</p>
-<hr>
-<h2 id="type-aliases"><a class="header" href="#type-aliases">Type Aliases</a></h2>
-<h3 id="structural-alias"><a class="header" href="#structural-alias">Structural alias</a></h3>
-<p>Interchangeable with the underlying type.</p>
-<pre><code class="language-compact">type Pair&lt;T&gt; = [T, T];
-type Hash = Bytes&lt;32&gt;;
-</code></pre>
-<p>Can use <code>Hash</code> anywhere you use <code>Bytes&lt;32&gt;</code>, and vice versa.</p>
-<h3 id="nominal-alias"><a class="header" href="#nominal-alias">Nominal alias</a></h3>
-<p>Distinct type requiring explicit cast.</p>
-<pre><code class="language-compact">new type UserId = Bytes&lt;32&gt;;
-new type TokenAmount = Uint&lt;64&gt;;
-</code></pre>
-<p>Cannot use <code>Bytes&lt;32&gt;</code> where <code>UserId</code> is expected without a cast. This prevents mixing up IDs and amounts.</p>
-<hr>
-<h2 id="subtyping-rules"><a class="header" href="#subtyping-rules">Subtyping Rules</a></h2>
+<h2 id="mental-model"><a class="header" href="#mental-model">Mental Model</a></h2>
+<p><strong>A circuit is a constraint system, not a procedure.</strong></p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Rule</th><th>Meaning</th></tr>
+<tr><th>Functions</th><th>Circuits</th></tr>
 </thead>
 <tbody>
-<tr><td>Any <code>T</code> is a subtype of itself</td><td>Identity</td></tr>
-<tr><td><code>Uint&lt;0..n&gt;</code> is a subtype of <code>Uint&lt;0..m&gt;</code> if <code>n ≤ m</code></td><td>Range widening</td></tr>
-<tr><td><code>Uint&lt;0..n&gt;</code> is a subtype of <code>Field</code> if <code>n-1</code> is within field range</td><td>Field compatibility</td></tr>
-<tr><td><code>[T1, ..., Tn]</code> is a subtype of <code>[S1, ..., Sn]</code> if each <code>Ti</code> is a subtype of <code>Si</code></td><td>Tuple matching</td></tr>
+<tr><td>Execute statements in sequence</td><td>Declare relationships between inputs/outputs</td></tr>
+<tr><td>Return values</td><td>Assert equalities between expressions</td></tr>
+<tr><td>Can have side effects</td><td>No side effects (pure circuits)</td></tr>
+<tr><td>Run at runtime</td><td>Compile to gates and constraints</td></tr>
+<tr><td>Reveal inputs/outputs</td><td>Proves constraints satisfied without revealing inputs</td></tr>
 </tbody>
 </table>
 </div>
-<p>Subtyping is used in assignment and parameter passing.</p>
+<p>When you call a circuit from your DApp, you’re not “running” it in the traditional sense. You’re generating a proof that the declared constraints held for the actual inputs.</p>
 <hr>
-<h2 id="type-casting"><a class="header" href="#type-casting">Type Casting</a></h2>
-<pre><code class="language-compact">const x: Uint&lt;64&gt; = 42;
-const y = x as Field;          // widen to Field
-const z = x as Uint&lt;0..1000&gt;;  // narrow, dynamic error if out of range
-const b = someBytes as UserId;   // nominal alias cast
+<h2 id="syntax"><a class="header" href="#syntax">Syntax</a></h2>
+<pre><code class="language-compact">export pure circuit name&lt;GenericParams&gt;(param: Type, ...): ReturnType {
+  // body
+}
 </code></pre>
-<ul>
-<li><code>as T</code> widens or narrows.</li>
-<li>Narrowing that fails at runtime produces a transaction error.</li>
-<li>Nominal aliases require explicit cast.</li>
-</ul>
-<hr>
-<h2 id="default-values"><a class="header" href="#default-values">Default Values</a></h2>
-<p>Every type has a compile-time-known default:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Type</th><th>Default</th></tr>
+<tr><th>Part</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>Boolean</code></td><td><code>false</code></td></tr>
-<tr><td><code>Uint&lt;n&gt;</code>, <code>Uint&lt;0..n&gt;</code>, <code>Field</code></td><td><code>0</code></td></tr>
-<tr><td><code>Bytes&lt;n&gt;</code></td><td><code>n</code> zero bytes</td></tr>
-<tr><td><code>[T1, ..., Tn]</code></td><td>tuple of defaults</td></tr>
-<tr><td><code>Vector&lt;n, T&gt;</code></td><td>vector of defaults</td></tr>
-<tr><td><code>struct</code></td><td>each field to default</td></tr>
-<tr><td><code>enum</code></td><td>first variant</td></tr>
-<tr><td><code>Opaque&lt;"string"&gt;</code></td><td>zero-length string</td></tr>
-<tr><td><code>Opaque&lt;"Uint8Array"&gt;</code></td><td>zero-length array</td></tr>
+<tr><td><code>export</code></td><td>Callable from TypeScript (your DApp)</td></tr>
+<tr><td><code>pure</code></td><td>Optional. Asserts no side effects (ledger reads/writes, witness calls)</td></tr>
+<tr><td><code>circuit</code></td><td>The keyword, this is a constraint declaration</td></tr>
+<tr><td><code>GenericParams</code></td><td>Optional type parameters</td></tr>
+<tr><td><code>param: Type</code></td><td>Each parameter must have an explicit type</td></tr>
+<tr><td><code>ReturnType</code></td><td>Must be explicitly declared</td></tr>
 </tbody>
 </table>
 </div>
-<pre><code class="language-compact">const empty = default&lt;Bytes&lt;32&gt;&gt;;
-const zero = default&lt;Uint&lt;64&gt;&gt;;
+<hr>
+<h2 id="simple-examples"><a class="header" href="#simple-examples">Simple Examples</a></h2>
+<pre><code class="language-compact">circuit add(a: Uint&lt;64&gt;, b: Uint&lt;64&gt;): Uint&lt;64&gt; {
+  return a + b;
+}
+
+export circuit get(): Uint&lt;64&gt; {
+  assert(state == State.SET, "Value is not set");
+  return value;
+}
 </code></pre>
-<p>Used when initializing ledger fields without a constructor.</p>
+<p>The <code>assert</code> statement is itself a constraint. The circuit fails if the condition is false, the proof won’t verify.</p>
+<hr>
+<h2 id="pure-vs-impure"><a class="header" href="#pure-vs-impure">Pure vs Impure</a></h2>
+<p>A circuit is <strong>pure</strong> if it computes outputs from inputs only, no ledger reads, no ledger writes, no witness calls.</p>
+<pre><code class="language-compact">pure circuit hashPair(a: Field, b: Field): Field {
+  return transientHash&lt;[Field, Field]&gt;([a, b]);
+}
+</code></pre>
+<p>If you mark a circuit <code>pure</code> but it accidentally calls a witness, the compiler catches it. Pure circuits appear in the <code>PureCircuits</code> TypeScript type, they’re the circuits that don’t need state access.</p>
+<p><strong>Why mark pure?</strong> It documents intent and lets the compiler verify it. If you’re using a circuit in a context where ledger state shouldn’t change (like computing a hash for a commitment), <code>pure</code> ensures you didn’t accidentally depend on ledger state.</p>
+<hr>
+<h2 id="parameters-and-destructuring"><a class="header" href="#parameters-and-destructuring">Parameters and Destructuring</a></h2>
+<pre><code class="language-compact">circuit double(x: Field): Field { return x + x; }
+
+// tuple destructuring
+circuit sumPair([a, b]: [Field, Field]): Field { return a + b; }
+
+// struct destructuring
+struct Point { x: Uint&lt;32&gt;, y: Uint&lt;32&gt; }
+circuit sumPoint({x, y}: Point): Uint&lt;64&gt; { return x + y; }
+
+// rename a field
+circuit useX({x: val}: Point): Uint&lt;32&gt; { return val; }
+</code></pre>
+<p>Destructuring works at the parameter level. This is syntactic sugar, it’s the same as:</p>
+<pre><code class="language-compact">circuit sumPoint(p: Point): Uint&lt;64&gt; { return p.x + p.y; }
+</code></pre>
+<hr>
+<h2 id="return-types"><a class="header" href="#return-types">Return Types</a></h2>
+<p>Use <code>[]</code> for circuits that return nothing (they only update state):</p>
+<pre><code class="language-compact">export circuit clear(): [] {
+  state = State.UNSET;
+}
+</code></pre>
+<p><code>[]</code> means “no return value.” The circuit still produces a proof, it proves the state was updated correctly.</p>
+<hr>
+<h2 id="local-bindings"><a class="header" href="#local-bindings">Local Bindings</a></h2>
+<pre><code class="language-compact">circuit compute(x: Field): Field {
+  const doubled = x + x;
+  const result = doubled * 3;
+  return result;
+}
+
+const [a, b] = pair;
+const {x, y} = point;
+</code></pre>
+<p>Variables are immutable after binding. <code>const x = ...; x = ...;</code> is invalid. This isn’t a style choice, it’s enforced because circuits declare constraints, and reassignment would be ambiguous in a constraint system.</p>
+<hr>
+<h2 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h2>
+<pre><code class="language-compact">assert(state == State.SET, "Value is not initialized");
+
+if (condition) {
+  // then
+} else {
+  // else
+}
+</code></pre>
+<p><code>if</code>/<code>else</code> works, but there’s no early return from within a <code>for</code> body. This is because circuits need to declare all constraints, a <code>return</code> inside a loop would make the constraint structure conditional in a way the compiler can’t handle.</p>
+<hr>
+<h2 id="for-loops"><a class="header" href="#for-loops">For Loops</a></h2>
+<p>Both forms are bounded at compile time:</p>
+<pre><code class="language-compact">// iterate over vector
+for (const x of v) { }
+
+// iterate over numeric range (0..N excludes N)
+for (const i of 0..10) { }
+</code></pre>
+<p><code>return</code> cannot be used inside a <code>for</code> body. Use <code>map</code> and <code>fold</code> for accumulation.</p>
+<hr>
+<h2 id="map-and-fold"><a class="header" href="#map-and-fold">map and fold</a></h2>
+<p>For transformation and accumulation without <code>return</code>:</p>
+<pre><code class="language-compact">circuit doubleAll(v: Vector&lt;4, Field&gt;): Vector&lt;4, Field&gt; {
+  return map((x) =&gt; x + x, v);
+}
+
+circuit sumAll(v: Vector&lt;4, Field&gt;): Field {
+  return fold((acc, x) =&gt; acc + x, 0, v);
+}
+</code></pre>
+<p><code>map</code> applies a function to each element. <code>fold</code> accumulates across elements. These are idiomatic in Compact because <code>for</code> loops can’t use <code>return</code>.</p>
+<hr>
+<h2 id="generic-circuits"><a class="header" href="#generic-circuits">Generic Circuits</a></h2>
+<pre><code class="language-compact">circuit identity&lt;T&gt;(x: T): T { return x; }
+
+circuit firstOf&lt;#N, T&gt;(v: Vector&lt;N, T&gt;): T { return v[0]; }
+</code></pre>
+<p>Generic circuits must be specialized at the call site:</p>
+<pre><code class="language-compact">const x = identity&lt;Field&gt;(42);
+const head = firstOf&lt;4, Field&gt;([1, 2, 3, 4]);
+</code></pre>
+<p>Generic circuits cannot be exported from the top level, they must be specialized before export.</p>
+<hr>
+<h2 id="what-actually-happens-under-the-hood"><a class="header" href="#what-actually-happens-under-the-hood">What Actually Happens Under the Hood</a></h2>
+<p>When you compile a circuit:</p>
+<pre><code>Compact code
+        ↓
+Compiler generates constraint system (ZKIR)
+        ↓
+Constraint system → arithmetic circuit (gates + wires)
+        ↓
+At runtime: inputs + proof keys → ZK proof
+        ↓
+Proof submitted → verified → state updated
+</code></pre>
+<p>The circuit declares constraints. The proof system converts those constraints into an arithmetic circuit. The proof proves the arithmetic circuit was satisfied.</p>
+<p><strong>The key insight:</strong> The circuit doesn’t “execute” at verification time. The proof contains enough information for anyone to verify the constraints held without re-executing the computation.</p>
 <hr>
 <h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
 <ol>
 <li>
-<p><strong>Using <code>Field</code> when you need comparisons.</strong> Field values can only be compared with <code>==</code> and <code>!=</code>. Use <code>Uint&lt;0..n&gt;</code> for ordered comparisons.</p>
+<p><strong>Thinking circuits execute like functions.</strong> Circuits declare constraints. The proof proves the constraints were satisfied. “Running” a circuit means generating a proof.</p>
 </li>
 <li>
-<p><strong>Assuming unbounded <code>Uint</code>.</strong> <code>Uint&lt;64&gt;</code> is exactly 64 bits, wrapping at overflow. Use bounded types if you need range checking.</p>
+<p><strong>Using <code>return</code> inside <code>for</code> loops.</strong> Not allowed. The circuit structure must be fully determined at compile time. Use <code>map</code> and <code>fold</code> instead.</p>
 </li>
 <li>
-<p><strong>Confusing structural and nominal aliases.</strong> <code>type Hash = Bytes&lt;32&gt;</code> is structural, fully interchangeable. <code>new type UserId = Bytes&lt;32&gt;</code> is nominal, requires explicit cast.</p>
+<p><strong>Forgetting that variables are immutable.</strong> <code>const x = 1; x = 2;</code> is invalid. Once bound, a value cannot change. Use <code>fold</code> or multiple variables if you need accumulation.</p>
 </li>
 <li>
-<p><strong>Forgetting that <code>as Uint&lt;0..n&gt;</code> can fail at runtime.</strong> Narrowing to a bounded type with a value outside the range produces a transaction error, not a compiler error.</p>
+<p><strong>Marking impure circuits <code>pure</code>.</strong> If a circuit reads the ledger or calls a witness, it’s impure. The compiler catches mismatches, but understanding why matters: <code>pure</code> is a promise about no side effects.</p>
 </li>
 <li>
-<p><strong>Using <code>Bytes&lt;n&gt;</code> when you need padding.</strong> <code>Bytes&lt;32&gt;</code> is exactly 32 bytes. Use <code>pad(32, str)</code> to create fixed-length byte vectors from strings.</p>
+<p><strong>Not using <code>assert</code> on witness outputs.</strong> Witnesses are untrusted. The ZK proof proves the circuit’s logic ran correctly, it doesn’t prove the inputs were sensible. Always validate: <code>assert(balance &gt;= amount, "Insufficient")</code>.</p>
 </li>
 </ol>
 <hr>
@@ -359,49 +365,49 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Concept</th><th>TypeScript</th><th>Rust</th><th>Compact</th></tr>
+<tr><th>Concept</th><th>TypeScript functions</th><th>Rust</th><th>Solidity</th><th>Compact circuits</th></tr>
 </thead>
 <tbody>
-<tr><td>Sized int</td><td>N/A</td><td><code>u64</code>, <code>u8</code></td><td><code>Uint&lt;64&gt;</code>, <code>Uint&lt;8&gt;</code></td></tr>
-<tr><td>Bounded int</td><td><code>number</code> (runtime check)</td><td>N/A</td><td><code>Uint&lt;0..n&gt;</code></td></tr>
-<tr><td>Byte array</td><td><code>Buffer</code>, <code>Uint8Array</code></td><td><code>[u8; 32]</code></td><td><code>Bytes&lt;32&gt;</code></td></tr>
-<tr><td>Tuple</td><td><code>[type1, type2]</code></td><td><code>(T1, T2)</code></td><td><code>[T1, T2]</code></td></tr>
-<tr><td>Struct</td><td><code>class</code>, <code>interface</code></td><td><code>struct</code></td><td><code>struct</code></td></tr>
-<tr><td>Enum</td><td><code>enum</code></td><td><code>enum</code></td><td><code>enum</code></td></tr>
-<tr><td>Type alias</td><td><code>type A = B</code></td><td><code>type A = B</code></td><td><code>type A = B</code> or <code>new type A = B</code></td></tr>
-<tr><td>Dynamic type</td><td><code>any</code></td><td>N/A</td><td><strong>not available</strong></td></tr>
+<tr><td>Parameters</td><td>typed</td><td>typed</td><td>typed</td><td>typed</td></tr>
+<tr><td>Return</td><td>explicit</td><td>explicit</td><td>explicit</td><td>explicit</td></tr>
+<tr><td>Side effects</td><td>allowed</td><td>ownership</td><td>storage</td><td><strong>not in pure</strong></td></tr>
+<tr><td>Recursion</td><td>allowed</td><td>allowed</td><td>allowed</td><td><strong>not allowed</strong></td></tr>
+<tr><td>Unbounded loops</td><td>allowed</td><td>allowed</td><td>gas-limited</td><td><strong>not allowed</strong></td></tr>
+<tr><td>Immutability</td><td><code>const</code></td><td><code>let</code></td><td>implicit</td><td><code>const</code></td></tr>
+<tr><td>Execution</td><td>at runtime</td><td>at runtime</td><td>at runtime</td><td>at compile (proves at runtime)</td></tr>
 </tbody>
 </table>
 </div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>All types are fixed-size at compile time. No <code>any</code>.</li>
-<li><code>Field</code> supports only <code>==</code> and <code>!=</code>. Use <code>Uint&lt;0..n&gt;</code> for ordered comparisons.</li>
-<li><code>Uint&lt;0..n&gt;</code> narrows to bounded range. <code>as Uint&lt;0..n&gt;</code> can fail at runtime.</li>
-<li><code>new type</code> creates nominal aliases, requires explicit cast.</li>
-<li><code>type</code> creates structural aliases, fully interchangeable.</li>
-<li>Every type has a default value. Use <code>default&lt;T&gt;()</code>.</li>
-<li>Opaque values are not hidden, they’re just not directly readable by circuits.</li>
+<li>A circuit is a constraint declaration, not a procedure.</li>
+<li><code>return a + b</code> asserts output equals a + b. It doesn’t “compute” it in sequence.</li>
+<li>Pure circuits have no side effects. Impure circuits read/write ledger state.</li>
+<li>Variables are immutable after binding. No reassignment.</li>
+<li>No <code>return</code> inside <code>for</code> loops. Use <code>map</code> and <code>fold</code>.</li>
+<li>Generic circuits must be specialized at the call site.</li>
+<li>The ZK proof proves constraints were satisfied, it doesn’t reveal inputs.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Disclosure boundary</li>
-<li><strong>Next:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Collection types for ledger state</li>
-<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Built-in types</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact">08.01 Primitives</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact">08.02 Composites</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-04.html">Ledger State</a>  Public state model</li>
+<li><strong>Next:</strong> <a href="./chapter-06.html">Witnesses</a>  How private inputs enter circuits</li>
+<li><strong>See also:</strong> <a href="./chapter-00.html">What is Compact</a>  Compilation overview</li>
+<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Privacy boundary</li>
+<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-06.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-08b.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-08.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapters/chapter-09.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -411,11 +417,11 @@ const zero = default&lt;Uint&lt;64&gt;&gt;;
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-06.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-08b.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-08.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapters/chapter-09.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
