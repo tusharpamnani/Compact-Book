@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger State - Compact Book</title>
+        <title>Neovim Setup - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,232 +174,95 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-state"><a class="header" href="#ledger-state">Ledger State</a></h1>
-<p>This note explains the ledger  Midnight’s public state layer  and how it relates to private state.</p>
+                        <h1 id="neovim-setup"><a class="header" href="#neovim-setup">Neovim Setup</a></h1>
+<p>This note covers setting up Compact language support in Neovim using <a href="https://github.com/1NickPappas/compact.vim">compact.vim</a>, a community-driven plugin.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a> · <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-and-maintaining-public-state">Ledger State</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/neovim-setup">Neovim Setup</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>The ledger is Midnight’s <strong>public world</strong>. Every node on the network stores it. Everyone can read it.</p>
-<p>Private data (witnesses) lives on the user’s local machine and never touches the chain. The two are connected by <code>disclose()</code>, a compile-time annotation that marks intentional disclosure.</p>
-<p>The key insight: <strong>privacy is the default, not opt-in.</strong> Private data stays private unless you explicitly mark it for disclosure.</p>
+<p>The compact.vim plugin provides language features for Compact source files in Neovim. It’s not an official Midnight plugin, but it’s the recommended way to edit <code>.compact</code> files with proper syntax highlighting and indentation.</p>
+<p>The plugin matches the language features found in the VS Code extension, but for Neovim.</p>
 <hr>
-<h2 id="the-two-worlds"><a class="header" href="#the-two-worlds">The Two Worlds</a></h2>
+<h2 id="features"><a class="header" href="#features">Features</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Property</th><th><code>export ledger</code></th><th>Private state (witnesses)</th></tr>
+<tr><th>Feature</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td>Where it lives</td><td>Every network node</td><td>User’s local storage</td></tr>
-<tr><td>Who can read it</td><td>Everyone</td><td>Only the owner</td></tr>
-<tr><td>On-chain representation</td><td>Plaintext value</td><td>Nothing (commitment or nothing)</td></tr>
-<tr><td>How it’s updated</td><td>Via ZK proof</td><td>Never touches the chain</td></tr>
-<tr><td>Update mechanism</td><td>Ledger assignment</td><td>Witness callbacks</td></tr>
+<tr><td>Syntax highlighting</td><td>Keywords, types, circuits colored</td></tr>
+<tr><td>Smart indentation</td><td>Proper indent for blocks</td></tr>
+<tr><td>Code folding</td><td>Fold circuit definitions</td></tr>
+<tr><td>Text objects</td><td>Select circuit bodies</td></tr>
+<tr><td>Import navigation</td><td><code>gf</code> jumps to imports</td></tr>
+<tr><td>Compiler integration</td><td><code>:make</code> runs the compiler</td></tr>
 </tbody>
 </table>
 </div>
 <hr>
-<h2 id="ledger-state-updates"><a class="header" href="#ledger-state-updates">Ledger State Updates</a></h2>
-<p><img src="../images/ledger_update_flow.png" alt="Ledger Update Flow"></p>
-<p>The ledger update happens atomically with the proof. Either the proof is valid and the state changes, or it isn’t and nothing changes.</p>
-<hr>
-<h2 id="declaring-ledger-fields"><a class="header" href="#declaring-ledger-fields">Declaring Ledger Fields</a></h2>
-<pre><code class="language-compact">ledger val: Field;                                    // basic field
-export ledger cnt: Counter;                           // exported, readable
-sealed ledger config: Uint&lt;32&gt;;                       // write-once
-export sealed ledger mapping: Map&lt;Boolean, Field&gt;;  // exported + sealed
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<h3 id="using-lazynvim"><a class="header" href="#using-lazynvim">Using lazy.nvim</a></h3>
+<p>Add to your plugins in <code>init.lua</code>:</p>
+<pre><code class="language-lua">return require("lazy").setup({
+  { "1NickPappas/compact.vim" },
+})
 </code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Modifier</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>export</code></td><td>Readable from TypeScript (your DApp)</td></tr>
-<tr><td><code>sealed</code></td><td>Writeable only during initialization</td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><code>ledger</code> without modifiers = basic, non-exported field</li>
-<li><code>export ledger</code> = readable by your DApp</li>
-<li><code>sealed ledger</code> = writeable during initialization only</li>
-<li><code>export sealed ledger</code> = both</li>
-</ul>
-<p>All ledger fields initialize to their type’s default (zero, empty, first variant, etc.). The constructor can override them.</p>
-<hr>
-<h2 id="the-disclose-boundary"><a class="header" href="#the-disclose-boundary">The <code>disclose()</code> Boundary</a></h2>
-<p><code>disclose()</code> is a <strong>compile-time annotation</strong>, not encryption. It tells the compiler: “I am intentionally disclosing witness data.”</p>
-<pre><code class="language-compact">// Without disclose(): compiler error
-export circuit record(): [] {
-  stored = getSecret();   // error: potential witness disclosure
-}
-
-// With disclose(): compiles
-export circuit record(): [] {
-  stored = disclose(getSecret());  // ok: declared
-}
+<h3 id="using-packer"><a class="header" href="#using-packer">Using packer</a></h3>
+<pre><code class="language-lua">use("1NickPappas/compact.vim")
 </code></pre>
-<p>The compiler tracks witness data through every operation, arithmetic, type conversions, function calls. If witness data could reach the ledger without <code>disclose()</code>, you get a compiler error.</p>
-<p><strong>What this means:</strong> You cannot accidentally leak private data. The compiler enforces the privacy boundary.</p>
-<hr>
-<h2 id="when-to-use-export-ledger"><a class="header" href="#when-to-use-export-ledger">When to Use <code>export ledger</code></a></h2>
-<p><strong>Good candidates for <code>export ledger</code>:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it belongs on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Global invariants (total supply, reserve balance)</td><td>Everyone needs to see them</td></tr>
-<tr><td>State flags others react to</td><td>Needed for coordination</td></tr>
-<tr><td>Commitments to private values (the hash, not the value)</td><td>Proves existence without revealing</td></tr>
-<tr><td>Data your frontend needs to read directly</td><td>Otherwise you can’t display it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Bad candidates:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it doesn’t belong on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Per-user balances</td><td>Only one user cares</td></tr>
-<tr><td>Personal data</td><td>Privacy violation</td></tr>
-<tr><td>Any value belonging to only one user</td><td>No one else needs it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Heuristic:</strong> If removing this field would break another user’s ability to interact with the contract, it belongs in <code>export ledger</code>.</p>
-<hr>
-<h2 id="the-commitment-pattern"><a class="header" href="#the-commitment-pattern">The Commitment Pattern</a></h2>
-<p><img src="../images/ledger_commitment_pattern.png" alt="Commitment Pattern"></p>
-<p>If <code>export ledger</code> puts values on-chain as plaintext, and private state keeps values off-chain entirely, how do you verify something about private state?</p>
-<p><strong>Answer: commitments.</strong> Store the hash on-chain. Keep the value off-chain. Prove knowledge of the value without revealing it.</p>
-<pre><code class="language-compact">export ledger balanceCommitments: Map&lt;Bytes&lt;32&gt;, Bytes&lt;32&gt;&gt;;
-
-export circuit commitBalance(value: Uint&lt;64&gt;): [] {
-  const nonce = freshNonce();
-  const commitment = persistentCommit&lt;Uint&lt;64&gt;&gt;(value, nonce);
-  balanceCommitments.insert(disclose(callerAddress()), disclose(commitment));
-}
+<h3 id="using-vim-plug"><a class="header" href="#using-vim-plug">Using vim-plug</a></h3>
+<pre><code class="language-vim">Plug '1NickPappas/compact.vim'
 </code></pre>
-<p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
 <hr>
-<h2 id="commitment-tools"><a class="header" href="#commitment-tools">Commitment Tools</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Function</th><th>Output</th><th>Persists?</th><th>For ledger?</th><th>Witness-tainted?</th></tr>
-</thead>
-<tbody>
-<tr><td><code>transientHash</code></td><td><code>Field</code></td><td>No</td><td>No</td><td>Yes</td></tr>
-<tr><td><code>transientCommit</code></td><td><code>Field</code></td><td>No</td><td>No</td><td><strong>No</strong></td></tr>
-<tr><td><code>persistentHash</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-<tr><td><code>persistentCommit</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><strong>Persistent:</strong> Survives contract upgrades. Use for long-term storage.</li>
-<li><strong>Transient:</strong> Does not survive upgrades. Use for temporary computations.</li>
-<li><strong>Commit (vs hash):</strong> Includes a random nonce. The nonce hides the input even if the value is known. Use when the value might be guessable.</li>
-</ul>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<h3 id="file-detection"><a class="header" href="#file-detection">File Detection</a></h3>
+<p>The plugin automatically detects <code>.compact</code> files. No configuration needed.</p>
+<h3 id="syntax-highlighting"><a class="header" href="#syntax-highlighting">Syntax Highlighting</a></h3>
+<p>Syntax highlighting works automatically.</p>
+<h3 id="compiler-integration"><a class="header" href="#compiler-integration">Compiler Integration</a></h3>
+<p>Run the compiler from Neovim:</p>
+<pre><code class="language-vim">:compiler compactc
+:make %:p
+</code></pre>
 <hr>
-<h2 id="ledger-state-types"><a class="header" href="#ledger-state-types">Ledger-State Types</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Type</th><th>What it is</th></tr>
-</thead>
-<tbody>
-<tr><td><code>T</code> (any type)</td><td>A single <code>Cell&lt;T&gt;</code>, readable and writable</td></tr>
-<tr><td><code>Counter</code></td><td>Unsigned counter with atomic increment (low contention)</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td>Unbounded set of unique values</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td>Unbounded key-value mapping</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td>Unbounded ordered list (pushFront/popFront)</td></tr>
-<tr><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Bounded Merkle tree of depth n (2 ≤ n ≤ 32)</td></tr>
-<tr><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Like <code>MerkleTree</code> but retains past roots</td></tr>
-<tr><td><code>Kernel</code></td><td>Built-in operations (block time, tokens, address)</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<h3 id="opening-a-compact-file"><a class="header" href="#opening-a-compact-file">Opening a Compact File</a></h3>
+<pre><code class="language-bash">nvim contracts/contract.compact
+</code></pre>
+<p>The plugin activates automatically based on the <code>.compact</code> extension.</p>
+<h3 id="folding"><a class="header" href="#folding">Folding</a></h3>
+<p>Fold circuits and blocks:</p>
+<pre><code class="language-vim">za         " toggle fold
+zR         " open all folds
+zM         " close all folds
+</code></pre>
+<h3 id="navigation"><a class="header" href="#navigation">Navigation</a></h3>
+<p>Jump to imports with <code>gf</code>:</p>
+<pre><code class="language-vim">gf         " go to file under cursor
+</code></pre>
 <hr>
-<h2 id="choosing-the-right-type"><a class="header" href="#choosing-the-right-type">Choosing the Right Type</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>ledger f: T</code> (Cell)</td></tr>
-<tr><td>Monotonically growing counter (low contention)</td><td><code>Counter</code></td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (current root only)</td><td><code>MerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (any past root)</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>Block time, tokens, contract address</td><td><code>Kernel</code></td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
-<ol>
-<li>
-<p><strong>Treating <code>export ledger</code> as encrypted.</strong> It isn’t. Everything in <code>export ledger</code> is plaintext and readable by everyone. If you need privacy, use the commitment pattern.</p>
-</li>
-<li>
-<p><strong>Forgetting that witnesses never touch the chain.</strong> Witness data stays local. Only the proof goes on-chain. You cannot store witness data directly, you must <code>disclose()</code> it first.</p>
-</li>
-<li>
-<p><strong>Reusing nonces.</strong> Two commitments with the same nonce and value are identical on-chain. Always use a fresh nonce.</p>
-</li>
-<li>
-<p><strong>Putting per-user data in the ledger.</strong> If only one user cares about a value, it shouldn’t be in the ledger. It’s a privacy leak.</p>
-</li>
-<li>
-<p><strong>Using <code>transientHash</code> for ledger storage.</strong> Transient values don’t survive contract upgrades. Use <code>persistentHash</code> or <code>persistentCommit</code>.</p>
-</li>
-</ol>
-<hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Concept</th><th>Solidity</th><th>Rust</th><th>Compact</th></tr>
-</thead>
-<tbody>
-<tr><td>Public state</td><td><code>uint256 publicVar</code></td><td>storage fields</td><td><code>export ledger f: T</code></td></tr>
-<tr><td>Private state</td><td><code>private uint256</code> (still on chain)</td><td><code>u64</code> in memory</td><td><code>witness</code> (stays local)</td></tr>
-<tr><td>State updates</td><td>direct assignment</td><td><code>storage.write()</code></td><td>via ZK proof</td></tr>
-<tr><td>Reading state</td><td><code>Contract.state()</code></td><td>direct read</td><td><code>ledger(state)</code></td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="tree-sitter-integration"><a class="header" href="#tree-sitter-integration">Tree-Sitter Integration</a></h2>
+<p>The plugin supports tree-sitter for better parsing:</p>
+<pre><code class="language-lua">require("nvim-treesitter.configs").setup({
+  ensure_installed = { "compact" },
+})
+</code></pre>
+<p>The tree-sitter parser provides accurate syntax highlighting and better performance.</p>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>The ledger is public on-chain state. Everyone can read it.</li>
-<li>Private data (witnesses) stays local. Only the proof goes on-chain.</li>
-<li><code>disclose()</code> marks intentional disclosure. It’s a compile-time annotation, not encryption.</li>
-<li>Store commitments on-chain. Keep values off-chain. Prove knowledge without revealing.</li>
-<li>Always use a fresh nonce for commitments. Reuse = privacy leak.</li>
-<li><code>transient*</code> doesn’t survive upgrades. <code>persistent*</code> does.</li>
-<li><code>transientCommit</code> can commit private values without <code>disclose()</code>. The random nonce provides sufficient hiding.</li>
+<li>Install via your plugin manager.</li>
+<li>Syntax highlighting and indentation work automatically.</li>
+<li>Use <code>:make</code> to compile from Neovim.</li>
+<li>Review troubleshooting for issues.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
-<li><strong>Next:</strong> <a href="./chapter-05.html">Circuits</a>  How circuits work</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  The disclose() boundary in depth</li>
-<li><strong>See also:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Map, Set, MerkleTree details</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-18.html">Fixup Usage</a>  Automatic code migration</li>
+<li><strong>Next:</strong> <a href="./chapter-20.html">VS Code Extension</a>  VS Code setup</li>
+<li><strong>See also:</strong> <a href="./chapter-02.html">Setting Up the Compiler</a>  Toolchain installation</li>
 </ul>
 
                     </main>
@@ -437,6 +300,22 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

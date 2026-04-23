@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger State - Compact Book</title>
+        <title>Example Projects - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -174,243 +174,297 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-state"><a class="header" href="#ledger-state">Ledger State</a></h1>
-<p>This note explains the ledger  Midnight’s public state layer  and how it relates to private state.</p>
-<blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a> · <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-and-maintaining-public-state">Ledger State</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></p>
-</blockquote>
+                        <h1 id="example-projects"><a class="header" href="#example-projects">Example Projects</a></h1>
+<p>This note contains working Compact contracts with detailed explanations of what each demonstrates and why the design choices matter.</p>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>The ledger is Midnight’s <strong>public world</strong>. Every node on the network stores it. Everyone can read it.</p>
-<p>Private data (witnesses) lives on the user’s local machine and never touches the chain. The two are connected by <code>disclose()</code>, a compile-time annotation that marks intentional disclosure.</p>
-<p>The key insight: <strong>privacy is the default, not opt-in.</strong> Private data stays private unless you explicitly mark it for disclosure.</p>
-<hr>
-<h2 id="the-two-worlds"><a class="header" href="#the-two-worlds">The Two Worlds</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Property</th><th><code>export ledger</code></th><th>Private state (witnesses)</th></tr>
-</thead>
-<tbody>
-<tr><td>Where it lives</td><td>Every network node</td><td>User’s local storage</td></tr>
-<tr><td>Who can read it</td><td>Everyone</td><td>Only the owner</td></tr>
-<tr><td>On-chain representation</td><td>Plaintext value</td><td>Nothing (commitment or nothing)</td></tr>
-<tr><td>How it’s updated</td><td>Via ZK proof</td><td>Never touches the chain</td></tr>
-<tr><td>Update mechanism</td><td>Ledger assignment</td><td>Witness callbacks</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="ledger-state-updates"><a class="header" href="#ledger-state-updates">Ledger State Updates</a></h2>
-<p><img src="../images/ledger_update_flow.png" alt="Ledger Update Flow"></p>
-<p>The ledger update happens atomically with the proof. Either the proof is valid and the state changes, or it isn’t and nothing changes.</p>
-<hr>
-<h2 id="declaring-ledger-fields"><a class="header" href="#declaring-ledger-fields">Declaring Ledger Fields</a></h2>
-<pre><code class="language-compact">ledger val: Field;                                    // basic field
-export ledger cnt: Counter;                           // exported, readable
-sealed ledger config: Uint&lt;32&gt;;                       // write-once
-export sealed ledger mapping: Map&lt;Boolean, Field&gt;;  // exported + sealed
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Modifier</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>export</code></td><td>Readable from TypeScript (your DApp)</td></tr>
-<tr><td><code>sealed</code></td><td>Writeable only during initialization</td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><code>ledger</code> without modifiers = basic, non-exported field</li>
-<li><code>export ledger</code> = readable by your DApp</li>
-<li><code>sealed ledger</code> = writeable during initialization only</li>
-<li><code>export sealed ledger</code> = both</li>
-</ul>
-<p>All ledger fields initialize to their type’s default (zero, empty, first variant, etc.). The constructor can override them.</p>
-<hr>
-<h2 id="the-disclose-boundary"><a class="header" href="#the-disclose-boundary">The <code>disclose()</code> Boundary</a></h2>
-<p><code>disclose()</code> is a <strong>compile-time annotation</strong>, not encryption. It tells the compiler: “I am intentionally disclosing witness data.”</p>
-<pre><code class="language-compact">// Without disclose(): compiler error
-export circuit record(): [] {
-  stored = getSecret();   // error: potential witness disclosure
-}
-
-// With disclose(): compiles
-export circuit record(): [] {
-  stored = disclose(getSecret());  // ok: declared
-}
-</code></pre>
-<p>The compiler tracks witness data through every operation, arithmetic, type conversions, function calls. If witness data could reach the ledger without <code>disclose()</code>, you get a compiler error.</p>
-<p><strong>What this means:</strong> You cannot accidentally leak private data. The compiler enforces the privacy boundary.</p>
-<hr>
-<h2 id="when-to-use-export-ledger"><a class="header" href="#when-to-use-export-ledger">When to Use <code>export ledger</code></a></h2>
-<p><strong>Good candidates for <code>export ledger</code>:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it belongs on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Global invariants (total supply, reserve balance)</td><td>Everyone needs to see them</td></tr>
-<tr><td>State flags others react to</td><td>Needed for coordination</td></tr>
-<tr><td>Commitments to private values (the hash, not the value)</td><td>Proves existence without revealing</td></tr>
-<tr><td>Data your frontend needs to read directly</td><td>Otherwise you can’t display it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Bad candidates:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it doesn’t belong on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Per-user balances</td><td>Only one user cares</td></tr>
-<tr><td>Personal data</td><td>Privacy violation</td></tr>
-<tr><td>Any value belonging to only one user</td><td>No one else needs it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Heuristic:</strong> If removing this field would break another user’s ability to interact with the contract, it belongs in <code>export ledger</code>.</p>
-<hr>
-<h2 id="the-commitment-pattern"><a class="header" href="#the-commitment-pattern">The Commitment Pattern</a></h2>
-<p><img src="../images/ledger_commitment_pattern.png" alt="Commitment Pattern"></p>
-<p>If <code>export ledger</code> puts values on-chain as plaintext, and private state keeps values off-chain entirely, how do you verify something about private state?</p>
-<p><strong>Answer: commitments.</strong> Store the hash on-chain. Keep the value off-chain. Prove knowledge of the value without revealing it.</p>
-<pre><code class="language-compact">export ledger balanceCommitments: Map&lt;Bytes&lt;32&gt;, Bytes&lt;32&gt;&gt;;
-
-export circuit commitBalance(value: Uint&lt;64&gt;): [] {
-  const nonce = freshNonce();
-  const commitment = persistentCommit&lt;Uint&lt;64&gt;&gt;(value, nonce);
-  balanceCommitments.insert(disclose(callerAddress()), disclose(commitment));
-}
-</code></pre>
-<p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
-<hr>
-<h2 id="commitment-tools"><a class="header" href="#commitment-tools">Commitment Tools</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Function</th><th>Output</th><th>Persists?</th><th>For ledger?</th><th>Witness-tainted?</th></tr>
-</thead>
-<tbody>
-<tr><td><code>transientHash</code></td><td><code>Field</code></td><td>No</td><td>No</td><td>Yes</td></tr>
-<tr><td><code>transientCommit</code></td><td><code>Field</code></td><td>No</td><td>No</td><td><strong>No</strong></td></tr>
-<tr><td><code>persistentHash</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-<tr><td><code>persistentCommit</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><strong>Persistent:</strong> Survives contract upgrades. Use for long-term storage.</li>
-<li><strong>Transient:</strong> Does not survive upgrades. Use for temporary computations.</li>
-<li><strong>Commit (vs hash):</strong> Includes a random nonce. The nonce hides the input even if the value is known. Use when the value might be guessable.</li>
-</ul>
-<hr>
-<h2 id="ledger-state-types"><a class="header" href="#ledger-state-types">Ledger-State Types</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Type</th><th>What it is</th></tr>
-</thead>
-<tbody>
-<tr><td><code>T</code> (any type)</td><td>A single <code>Cell&lt;T&gt;</code>, readable and writable</td></tr>
-<tr><td><code>Counter</code></td><td>Unsigned counter with atomic increment (low contention)</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td>Unbounded set of unique values</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td>Unbounded key-value mapping</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td>Unbounded ordered list (pushFront/popFront)</td></tr>
-<tr><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Bounded Merkle tree of depth n (2 ≤ n ≤ 32)</td></tr>
-<tr><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Like <code>MerkleTree</code> but retains past roots</td></tr>
-<tr><td><code>Kernel</code></td><td>Built-in operations (block time, tokens, address)</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="choosing-the-right-type"><a class="header" href="#choosing-the-right-type">Choosing the Right Type</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>ledger f: T</code> (Cell)</td></tr>
-<tr><td>Monotonically growing counter (low contention)</td><td><code>Counter</code></td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (current root only)</td><td><code>MerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (any past root)</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>Block time, tokens, contract address</td><td><code>Kernel</code></td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
+<p>The best way to learn Compact is through working code. Each example here shows a specific pattern:</p>
 <ol>
-<li>
-<p><strong>Treating <code>export ledger</code> as encrypted.</strong> It isn’t. Everything in <code>export ledger</code> is plaintext and readable by everyone. If you need privacy, use the commitment pattern.</p>
-</li>
-<li>
-<p><strong>Forgetting that witnesses never touch the chain.</strong> Witness data stays local. Only the proof goes on-chain. You cannot store witness data directly, you must <code>disclose()</code> it first.</p>
-</li>
-<li>
-<p><strong>Reusing nonces.</strong> Two commitments with the same nonce and value are identical on-chain. Always use a fresh nonce.</p>
-</li>
-<li>
-<p><strong>Putting per-user data in the ledger.</strong> If only one user cares about a value, it shouldn’t be in the ledger. It’s a privacy leak.</p>
-</li>
-<li>
-<p><strong>Using <code>transientHash</code> for ledger storage.</strong> Transient values don’t survive contract upgrades. Use <code>persistentHash</code> or <code>persistentCommit</code>.</p>
-</li>
+<li><strong>NFT Contract</strong>, Ownership transfer with commitments (the most common pattern).</li>
+<li><strong>Collection Contract</strong>, Constructor parameters and parameterized contracts.</li>
+<li><strong>Bulletin Board</strong>, Single-owner state machine with derived keys.</li>
+</ol>
+<p>Study the patterns, not just the syntax. The patterns are what you’ll adapt for your own contracts.</p>
+<hr>
+<h2 id="nft-contract"><a class="header" href="#nft-contract">NFT Contract</a></h2>
+<blockquote>
+<p><strong>What it demonstrates:</strong> Ownership transfer with cryptographic commitments. The owner proves ownership without revealing their private key.</p>
+</blockquote>
+<h3 id="the-privacy-pattern"><a class="header" href="#the-privacy-pattern">The Privacy Pattern</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>What lives on-chain</th><th>What stays off-chain</th></tr>
+</thead>
+<tbody>
+<tr><td><code>tokenCommitments</code> (hash of <code>owner + metadataHash</code>)</td><td>The actual <code>owner</code> and <code>metadataHash</code></td></tr>
+<tr><td><code>totalSupply</code>, <code>nextTokenId</code></td><td>The user’s secret key</td></tr>
+</tbody>
+</table>
+</div>
+<p>To transfer an NFT, you prove you know the <code>owner</code> and <code>metadataHash</code> that hash to the stored commitment, without revealing them.</p>
+<p><img src="../images/nft_flow.png" alt="NFT Flow"></p>
+<h3 id="the-contract"><a class="header" href="#the-contract">The Contract</a></h3>
+<pre><code class="language-compact">pragma language_version 0.22;
+
+import CompactStandardLibrary;
+
+export ledger totalSupply: Uint&lt;64&gt;;
+export ledger nextTokenId: Uint&lt;64&gt;;
+export ledger tokenCommitments: Map&lt;Uint&lt;64&gt;, Bytes&lt;32&gt;&gt;;
+
+witness callerAddress(): Bytes&lt;32&gt;;
+
+circuit hashTokenData(owner: Bytes&lt;32&gt;, metadataHash: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
+    return persistentHash&lt;Vector&lt;2, Bytes&lt;32&gt;&gt;&gt;([owner, metadataHash]);
+}
+
+constructor() {
+    totalSupply = 0;
+    nextTokenId = 1;
+}
+
+export circuit mint(metadataHash: Bytes&lt;32&gt;): [] {
+    const caller = disclose(callerAddress());
+    const tokenId = nextTokenId;
+    const commitment = hashTokenData(caller, metadataHash);
+    tokenCommitments.insert(tokenId, disclose(commitment));
+    totalSupply = disclose((totalSupply + 1) as Uint&lt;64&gt;);
+    nextTokenId = disclose((tokenId + 1) as Uint&lt;64&gt;);
+}
+
+export circuit transfer(tokenId: Uint&lt;64&gt;, newOwner: Bytes&lt;32&gt;, tokenMetaHash: Bytes&lt;32&gt;): [] {
+    const caller = disclose(callerAddress());
+    const expectedCommitment = hashTokenData(caller, tokenMetaHash);
+    const pubTokenId = disclose(tokenId);
+    assert(tokenCommitments.member(pubTokenId), "Token does not exist");
+    const currentCommitment = tokenCommitments.lookup(pubTokenId);
+    assert(currentCommitment == expectedCommitment, "Not the owner");
+    const nextCommitment = hashTokenData(disclose(newOwner), tokenMetaHash);
+    tokenCommitments.insert(pubTokenId, disclose(nextCommitment));
+}
+
+export circuit verifyOwnership(tokenId: Uint&lt;64&gt;, tokenMetaHash: Bytes&lt;32&gt;): [] {
+    const caller = disclose(callerAddress());
+    const expectedCommitment = hashTokenData(caller, tokenMetaHash);
+    const pubTokenId = disclose(tokenId);
+    assert(tokenCommitments.member(pubTokenId), "Token does not exist");
+    const currentCommitment = tokenCommitments.lookup(pubTokenId);
+    assert(currentCommitment == expectedCommitment, "Not the owner");
+}
+</code></pre>
+<h3 id="walkthrough-mint"><a class="header" href="#walkthrough-mint">Walkthrough: Mint</a></h3>
+<pre><code>1. DApp calls mint(metadataHash)
+2. callerAddress() witness returns the caller's derived address
+3. hashTokenData(owner, metadataHash) computes the commitment
+4. tokenCommitments.insert(tokenId, commitment) stores the commitment
+5. Proof submitted: "caller knows owner that hashes to commitment"
+</code></pre>
+<p>The caller never reveals <code>owner</code>. They only reveal the <code>callerAddress</code> (which is public-derived from their secret key). The commitment proves they knew the private key.</p>
+<h3 id="walkthrough-transfer"><a class="header" href="#walkthrough-transfer">Walkthrough: Transfer</a></h3>
+<pre><code>1. DApp calls transfer(tokenId, newOwner, tokenMetaHash)
+2. callerAddress() returns the current owner's address
+3. hashTokenData(caller, tokenMetaHash) recomputes the expected commitment
+4. lookup(tokenId) gets the stored commitment
+5. assert(current == expected) verifies the caller is the owner
+6. hashTokenData(newOwner, tokenMetaHash) computes the new commitment
+7. insert(tokenId, newCommitment) updates ownership
+</code></pre>
+<p>The transfer proves the caller owned the NFT and authorizes the transfer to a new owner, without revealing the private keys.</p>
+<h3 id="why-this-pattern-works"><a class="header" href="#why-this-pattern-works">Why This Pattern Works</a></h3>
+<p>The commitment pattern is the key insight:</p>
+<pre><code>commitment = hash(owner + metadataHash)
+stored on-chain: commitment
+off-chain: owner, metadataHash
+</code></pre>
+<p>Even if everyone knows the <code>metadataHash</code> and sees the <code>commitment</code>, they cannot derive the <code>owner</code> without knowing the secret key.</p>
+<hr>
+<h2 id="collection-contract"><a class="header" href="#collection-contract">Collection Contract</a></h2>
+<blockquote>
+<p><strong>What it demonstrates:</strong> Constructor parameters. The contract is initialized with fixed parameters (name, description, max supply) that are set at deployment.</p>
+</blockquote>
+<h3 id="the-pattern"><a class="header" href="#the-pattern">The Pattern</a></h3>
+<pre><code class="language-compact">pragma language_version 0.22;
+
+import CompactStandardLibrary;
+
+export ledger collectionName: Bytes&lt;32&gt;;
+export ledger collectionDescription: Bytes&lt;64&gt;;
+export ledger creator: Bytes&lt;32&gt;;
+export ledger maxSupply: Uint&lt;64&gt;;
+export ledger totalSupply: Uint&lt;64&gt;;
+export ledger nextTokenId: Uint&lt;64&gt;;
+export ledger tokenCommitments: Map&lt;Uint&lt;64&gt;, Bytes&lt;32&gt;&gt;;
+
+witness callerAddress(): Bytes&lt;32&gt;;
+
+constructor(name: Bytes&lt;32&gt;, desc: Bytes&lt;64&gt;, cap: Uint&lt;64&gt;) {
+    collectionName = disclose(name);
+    collectionDescription = disclose(desc);
+    maxSupply = disclose(cap);
+    creator = disclose(callerAddress());
+    totalSupply = 0;
+    nextTokenId = 1;
+}
+
+export circuit mint(metadataHash: Bytes&lt;32&gt;): [] {
+    assert(totalSupply &lt; maxSupply, "Supply reached");
+    const caller = disclose(callerAddress());
+    const commitment = hashTokenData(caller, metadataHash);
+    tokenCommitments.insert(nextTokenId, disclose(commitment));
+    totalSupply = disclose((totalSupply + 1) as Uint&lt;64&gt;));
+    nextTokenId = disclose((tokenId + 1) as Uint&lt;64&gt;));
+}
+// ... transfer and verifyOwnership same as NFT contract
+</code></pre>
+<h3 id="what-changes"><a class="header" href="#what-changes">What Changes</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Element</th><th>Change from NFT</th></tr>
+</thead>
+<tbody>
+<tr><td>Constructor</td><td>Takes parameters: name, desc, cap</td></tr>
+<tr><td><code>maxSupply</code></td><td>Enforces the cap in <code>mint</code></td></tr>
+<tr><td><code>creator</code></td><td>Records who deployed the collection</td></tr>
+<tr><td><code>collectionName/Description</code></td><td>Human-readable metadata</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="constructor-parameters"><a class="header" href="#constructor-parameters">Constructor Parameters</a></h3>
+<p>Constructor parameters come from the deploying transaction. They’re disclosed at initialization, so the initial state is fully public.</p>
+<p>This is the right model for collections, where the metadata should be public and fixed.</p>
+<hr>
+<h2 id="bulletin-board-contract"><a class="header" href="#bulletin-board-contract">Bulletin Board Contract</a></h2>
+<blockquote>
+<p><strong>What it demonstrates:</strong> Single-owner state machine with derived public keys. The owner proves ownership by deriving the same public key from their secret.</p>
+</blockquote>
+<h3 id="the-pattern-1"><a class="header" href="#the-pattern-1">The Pattern</a></h3>
+<pre><code class="language-compact">pragma language_version 0.20;
+
+import CompactStandardLibrary;
+
+export enum State { VACANT, OCCUPIED }
+
+export ledger state: State;
+export ledger message: Maybe&lt;Opaque&lt;"string"&gt;&gt;;
+export ledger sequence: Counter;
+export ledger owner: Bytes&lt;32&gt;;
+
+constructor() {
+  state = State.VACANT;
+  message = none&lt;Opaque&lt;"string"&gt;&gt;();
+  sequence.increment(1);
+}
+
+witness localSecretKey(): Bytes&lt;32&gt;;
+
+export circuit post(newMessage: Opaque&lt;"string"&gt;): [] {
+  assert(state == State.VACANT, "Board occupied");
+  owner = disclose(publicKey(localSecretKey(), sequence as Field as Bytes&lt;32&gt;));
+  message = disclose(some&lt;Opaque&lt;"string"&gt;&gt;(newMessage));
+  state = State.OCCUPIED;
+}
+
+export circuit takeDown(): Opaque&lt;"string"&gt; {
+  assert(state == State.OCCUPIED, "Board empty");
+  assert(owner == publicKey(localSecretKey(), sequence as Field as Bytes&lt;32&gt;), "Not owner");
+  const msg = message.value;
+  state = State.VACANT;
+  sequence.increment(1);
+  message = none&lt;Opaque&lt;"string"&gt;();
+  return msg;
+}
+
+pure circuit publicKey(sk: Bytes&lt;32&gt;, seq: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
+  return persistentHash&lt;Vector&lt;3, Bytes&lt;32&gt;&gt;&gt;([pad(32, "bboard:pk:"), seq, sk]);
+}
+</code></pre>
+<h3 id="walkthrough-post"><a class="header" href="#walkthrough-post">Walkthrough: Post</a></h3>
+<pre><code>1. State must be VACANT (board is empty)
+2. Derive public key from secretKey + sequence
+3. Store the public key as owner
+4. Store the message (disclosed)
+5. Set state to OCCUPIED
+</code></pre>
+<h3 id="walkthrough-takedown"><a class="header" href="#walkthrough-takedown">Walkthrough: TakeDown</a></h3>
+<pre><code>1. State must be OCCUPIED (board has a message)
+2. Derive public key from secretKey + sequence
+3. assert(derived == stored) verifies caller is the owner
+4. Return and clear the message
+5. Set state back to VACANT
+</code></pre>
+<h3 id="why-sequence-matters"><a class="header" href="#why-sequence-matters">Why Sequence Matters</a></h3>
+<p>The <code>sequence</code> counter is part of the public key derivation. This prevents replay attacks, the same secret key produces a different public key for each message.</p>
+<p>Without sequence, an attacker who saw the first message could derive the same public key and post as the owner.</p>
+<hr>
+<h2 id="using-in-a-dapp"><a class="header" href="#using-in-a-dapp">Using in a DApp</a></h2>
+<h3 id="typescript-setup"><a class="header" href="#typescript-setup">TypeScript Setup</a></h3>
+<pre><code class="language-typescript">import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
+import { createWallet, createProviders } from './utils.js';
+
+async function mint(contractAddress: string, metadata: string) {
+  const wallet = await createWallet(seed);
+  const providers = await createProviders(wallet);
+
+  const callerAddressBytes = crypto.createHash('sha256')
+    .update(walletAddressString).digest();
+
+  const contract = await findDeployedContract(providers, {
+    contractAddress,
+    compiledContract: await getCompiledNFTContract('contract', callerAddressBytes),
+  });
+
+  const metadataHash = crypto.createHash('sha256').update(metadata).digest();
+
+  const tx = await contract.callTx.mint(metadataHash);
+  console.log(`Minted! Transaction: ${tx}`);
+}
+</code></pre>
+<h3 id="key-points"><a class="header" href="#key-points">Key Points</a></h3>
+<ol>
+<li><strong><code>callerAddressBytes</code></strong> is derived from the wallet address, this is the witness input.</li>
+<li><strong><code>metadataHash</code></strong> is computed from the metadata, anyone can verify this later.</li>
+<li><strong><code>callTx.mint()</code></strong> generates the proof and submits the transaction.</li>
+<li><strong><code>findDeployedContract()</code></strong> connects to the deployed contract on-chain.</li>
 </ol>
 <hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Concept</th><th>Solidity</th><th>Rust</th><th>Compact</th></tr>
-</thead>
-<tbody>
-<tr><td>Public state</td><td><code>uint256 publicVar</code></td><td>storage fields</td><td><code>export ledger f: T</code></td></tr>
-<tr><td>Private state</td><td><code>private uint256</code> (still on chain)</td><td><code>u64</code> in memory</td><td><code>witness</code> (stays local)</td></tr>
-<tr><td>State updates</td><td>direct assignment</td><td><code>storage.write()</code></td><td>via ZK proof</td></tr>
-<tr><td>Reading state</td><td><code>Contract.state()</code></td><td>direct read</td><td><code>ledger(state)</code></td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="more-examples"><a class="header" href="#more-examples">More Examples</a></h2>
+<ul>
+<li><a href="https://github.com/midnightntwrk/midnight-awesome-dapps">midnight-awesome-dapps</a>, Official examples</li>
+<li>Midnight Discord <code>#dev-showcase</code>, Community projects</li>
+</ul>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>The ledger is public on-chain state. Everyone can read it.</li>
-<li>Private data (witnesses) stays local. Only the proof goes on-chain.</li>
-<li><code>disclose()</code> marks intentional disclosure. It’s a compile-time annotation, not encryption.</li>
-<li>Store commitments on-chain. Keep values off-chain. Prove knowledge without revealing.</li>
-<li>Always use a fresh nonce for commitments. Reuse = privacy leak.</li>
-<li><code>transient*</code> doesn’t survive upgrades. <code>persistent*</code> does.</li>
-<li><code>transientCommit</code> can commit private values without <code>disclose()</code>. The random nonce provides sufficient hiding.</li>
+<li><strong>NFT Contract</strong>, Commitment pattern for ownership without revealing secrets.</li>
+<li><strong>Collection Contract</strong>, Constructor parameters for parameterized deployment.</li>
+<li><strong>Bulletin Board</strong>, Derived public keys + sequence for single-owner state machine.</li>
+<li><strong>Constructor</strong>, Runs once at deployment, sets initial state.</li>
+<li><strong>Witness</strong>, Provides private input (your secret key) without touching the chain.</li>
+<li><strong><code>disclose()</code></strong>, Marks intentional disclosure (owner address, message, etc.).</li>
+<li><strong><code>hashTokenData</code></strong>, Commits to <code>owner + metadataHash</code> without revealing either.</li>
+<li><strong>Sequence</strong>, Prevents replay by making each public key unique.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
-<li><strong>Next:</strong> <a href="./chapter-05.html">Circuits</a>  How circuits work</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  The disclose() boundary in depth</li>
-<li><strong>See also:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Map, Set, MerkleTree details</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></li>
+<li><strong>See also:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
+<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment pattern</li>
+<li><strong>See also:</strong> <a href="./chapter-06.html">Witnesses</a>  Private input mechanism</li>
+<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Disclosure boundary</li>
+<li><strong>See also:</strong> <a href="./chapter-15.html">Security and Best Practices</a>  Privacy patterns</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-08.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-17.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-10.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapters/chapter-19.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -420,11 +474,11 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-08.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-17.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-10.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapters/chapter-19.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

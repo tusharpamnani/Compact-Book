@@ -59,30 +59,37 @@ Start at the top. Each note assumes you understood the previous one.
 | # | Topic | What you learn | Level |
 |---|-------|------------|---------|
 | 00 | [What is Compact](./chapters/chapter-00.md) | What Compact is, what it compiles to, why boundedness matters | 🟢 Beginner |
-| 01 | [Why Compact](./chapters/chapter-01.md) | Why this design exists, what problems it solves | 🟢 Beginner |
+| 01 | [Modules and Imports](./chapters/chapter-01.md) | Organizing code across files | 🟢 Beginner |
 | 02 | [Setting Up the Compiler](./chapters/chapter-02.md) | Install the toolchain, compile your first contract | 🟢 Beginner |
-| 03 | [Writing a Contract](./chapters/chapter-03.md) | The four pieces of every contract | 🟡 Intermediate |
-| 04 | [Ledger State](./chapters/chapter-04.md) | Public vs private state, the `disclose()` boundary | 🟡 Intermediate |
-| 05 | [Circuits](./chapters/chapter-05.md) | How circuits work, why they're not functions | 🟡 Intermediate |
-| 06 | [Witnesses](./chapters/chapter-06.md) | How private inputs enter circuits without touching the chain | 🟡 Intermediate |
-| 07 | [Explicit Disclosure](./chapters/chapter-07.md) | The witness protection program, common mistakes | 🔴 Advanced |
-| 08 | [Data Types](./chapters/chapter-08.md) | The complete type system | 🟡 Intermediate |
-| 09 | [Ledger ADTs](./chapters/chapter-09.md) | Map, Set, MerkleTree, choosing the right state structure | 🔴 Advanced |
-| 10 | [Standard Library](./chapters/chapter-10.md) | Hashing, tokens, merkle trees | 🔴 Advanced |
-| 11 | [Modules and Imports](./chapters/chapter-11.md) | Organizing code across files | 🟡 Intermediate |
-| 12 | [Compact Grammar](./chapters/chapter-12.md) | Syntax rules, precedence, what the grammar enforces | 🟡 Intermediate |
-| 13 | [Keywords Reference](./chapters/chapter-13.md) | Every keyword, organized by purpose | 🟢 Beginner |
-| 14 | [Testing and Debugging](./chapters/chapter-14.md) | Error reading, version management, troubleshooting | 🟡 Intermediate |
-| 15 | [Security and Best Practices](./chapters/chapter-15.md) | Privacy patterns, commitment design, common leaks | 🔴 Advanced |
-| 16 | [Example Projects](./chapters/chapter-16.md) | Full working contracts with walkthroughs | 🟢 Beginner |
+| 03 | [VS Code Extension](./chapters/chapter-03.md) | Syntax highlighting, snippets, integrated building | 🟢 Beginner |
+| 04 | [Neovim Setup](./chapters/chapter-04.md) | Neovim plugin for Compact | 🟢 Beginner |
+| 05 | [Formatter Usage](./chapters/chapter-05.md) | Code formatting, style enforcement | 🟢 Beginner |
+| 06 | [Fixup Usage](./chapters/chapter-06.md) | Automatic code migration | 🟡 Intermediate |
+| 07 | [Data Types](./chapters/chapter-07.md) | The complete type system | 🟡 Intermediate |
+| 08 | [Circuits](./chapters/chapter-08.md) | How circuits work, why they're not functions | 🟡 Intermediate |
+| 09 | [Ledger State](./chapters/chapter-09.md) | Public vs private state, the `disclose()` boundary | 🟡 Intermediate |
+| 10 | [Witnesses](./chapters/chapter-10.md) | How private inputs enter circuits without touching the chain | 🟡 Intermediate |
+| 11 | [Explicit Disclosure](./chapters/chapter-11.md) | The witness protection program, common mistakes | 🔴 Advanced |
+| 12 | [Ledger ADTs](./chapters/chapter-12.md) | Map, Set, MerkleTree, choosing the right state structure | 🔴 Advanced |
+| 13 | [Standard Library](./chapters/chapter-13.md) | Hashing, tokens, merkle trees | 🔴 Advanced |
+| 14 | [Writing A Contract](./chapters/chapter-14.md) | The four pieces of every contract | 🟡 Intermediate |
+| 15 | [Why Compact](./chapters/chapter-15.md) | Why this design exists, what problems it solves | 🟢 Beginner |
+| 16 | [Security and Best Practices](./chapters/chapter-16.md) | Privacy patterns, commitment design, common leaks | 🔴 Advanced |
+| 17 | [Testing and Debugging](./chapters/chapter-17.md) | Error reading, version management, troubleshooting | 🟡 Intermediate |
+| 18 | [Example Projects](./chapters/chapter-18.md) | Full working contracts with walkthroughs | 🟢 Beginner |
+| 19 | [Compact Grammar](./chapters/chapter-19.md) | Syntax rules, precedence, what the grammar enforces | 🟡 Intermediate |
+| 20 | [Keywords Reference](./chapters/chapter-20.md) | Every keyword, organized by purpose | 🟢 Beginner |
 
 **Reading order:**
 
-- **00 → 03 → 16**, the core loop. Read these first.
-- **04 → 07**, the privacy model. Read before touching any private data.
-- **12 → 13 → 14**, the reference layer. Read when you need detail.
-- **08 → 09 → 10 → 11**, the type system and stdlib. Read as needed.
-- **15**, security. Read before deploying anything.
+- **00 → 01 → 02 → 03/04**, Get started. Install tools, choose your editor.
+- **05 → 06**, Set up tooling. Formatter and fixup keep code consistent.
+- **07 → 08 → 09 → 10 → 11**, Core concepts. Types, circuits, privacy model.
+- **12 → 13 → 14**, Advanced patterns. State structures, stdlib, writing contracts.
+- **15 → 16**, Design & security. Philosophy and best practices.
+- **17**, Testing. Debugging and version management.
+- **18**, Examples. Put it all together with working code.
+- **19 → 20**, Reference. Grammar and keywords when you need them.
 
 ---
 

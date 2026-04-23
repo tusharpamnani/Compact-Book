@@ -1,264 +1,283 @@
-# Explicit Disclosure
+# Data Types
 
-This note is the definitive guide to `disclose()`, what it means, how the compiler tracks witness data, and the common mistakes that trigger errors.
+This note covers Compact's type system, primitives, composites, and program-defined types.
 
-> **Docs:** [Explicit Disclosure](https://docs.midnight.network/compact/reference/explicit-disclosure)
-> **Examples:** [07.01 disclose](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/07.01.disclose.compact)
+> **Docs:** [Compact Types](https://docs.midnight.network/compact/reference/compact-reference#compact-types)
+> **Examples:** [08.01 Primitives](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact) · [08.02 Composites](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact)
 
 ---
 
 ## Intuition First
 
-`disclose()` is not a cryptographic operation. It does not encrypt, hide, or transform data. It is a **compile-time annotation** that tells the compiler: "I am intentionally making this data public."
+Compact is statically and strongly typed. Every expression has a type known at compile time. All types have fixed sizes at compile time. No `any`, no implicit `undefined`, no guessing.
 
-The compiler enforces this boundary. If witness data (from a `witness` callback) reaches the public ledger without `disclose()`, the compiler errors. This is the witness protection program, it prevents accidental privacy leaks.
+The type system serves two purposes in Compact:
 
-Understanding `disclose()` means understanding that the compiler tracks data flow, not that there's magic happening at runtime.
+1. **Normal type checking**, catching mismatches before runtime.
+2. **Privacy enforcement**, the compiler tracks which types contain witness data, and where that data can flow.
 
----
-
-## The Core Rule
-
-A Compact program must explicitly declare its intention to disclose data that might be private before:
-
-1. **Storing it in the public ledger**, `ledger x = disclose(witness())`
-2. **Returning it from an exported circuit**, `return disclose(witness())`
-3. **Passing it to another contract**, via `sendUnshielded`
-
-**Privacy is the default.** `disclose()` is the explicit exception.
+Strong typing is what makes privacy enforcement possible. If types were loose, the compiler couldn't track data flow.
 
 ---
 
-## What Counts as Witness Data
+## Primitive Types
 
-Witness data originates from:
-
-- **Return values of `witness` function calls**, The secret key, balance, etc.
-- **Arguments passed to exported circuits**, These come from the DApp, which may contain witness-derived data
-- **Arguments passed to the contract constructor**, Same as above
-
-Any value **derived** from witness data is also witness data. The taint follows the data everywhere.
-
----
-
-## The `disclose()` Flow
-
-![The disclose() Flow](../images/disclose_flow.png)
-
----
-
-## `disclose()` Syntax
+### Boolean
 
 ```compact
-disclose(expr)
+const flag: Boolean = true;
+const other = false;
 ```
 
-Wraps any expression. The compiler checks if `expr` contains witness data, if it does, the annotation is recorded and the disclosure is permitted.
+Two values: `true` and `false`. No truthy/falsy conversion, must be explicit.
+
+### Field
+
+The set of unsigned integers up to the order of the native prime field. Values in a Field can only be compared with `==` and `!=`, not with `<`, `<=`, `>`, `>=`.
 
 ```compact
-// Basic: disclose a witness value
-ledger balance: Uint<64>;
-export circuit record(): [] {
-  balance = disclose(getBalance());
-}
-
-// Array: disclose only the private element
-const result = [publicValue, disclose(privateValue)];
-
-// Function: disclose the return value
-return disclose(helper(witnessData));
+const f: Field = 42;
+const g = 0xdeadbeef as Field;  // large literals must be cast
 ```
 
-Place `disclose()` as close to the disclosure point as possible. This minimizes the scope of what you're declaring public.
+**Why no comparison?** Field arithmetic is modulo a prime. `<` comparisons in that space don't behave like integer comparisons. Use bounded types (`Uint<0..n>`) if you need comparisons.
 
----
+### Uint\<n\>: Sized Integer
 
-## The Compiler Error
-
-When you forget `disclose()`, the compiler gives you a detailed trace:
-
-```
-Exception: line 6 char 11:
-  potential witness-value disclosure must be declared but is not:
-    witness value potentially disclosed:
-      the return value of witness getBalance at line 2 char 1
-    nature of the disclosure:
-      ledger operation might disclose the witness value
-    via this path through the program:
-      the right-hand side of = at line 6 char 11
-```
-
-This tells you:
-1. Where the witness data came from (`getBalance`)
-2. Where it tried to go (the ledger)
-3. The exact path through the program
-
----
-
-## Indirect Disclosure
-
-You cannot hide witness data by passing it through arithmetic or helper circuits. The compiler tracks data flow through every operation.
+A fixed-width unsigned integer. Exactly `n` bits.
 
 ```compact
-// Compiler catches this
-circuit obfuscate(x: Field): Field {
-  return x + 73;  // output is still witness data
-}
-
-export circuit record(): [] {
-  const s = getBalance() as Field;
-  const x = obfuscate(s);
-  balance = x as Bytes<32>;  // error
-}
+const x: Uint<8> = 255;     // 0 to 255
+const y: Uint<64> = 1000000;
 ```
 
-Even `x + 73` doesn't hide the witness data. The compiler knows the output depends on the input.
+Overflow wraps. `Uint<8>(255) + Uint<8>(1) == 0`.
 
----
+### Uint<0..n>: Bounded Integer
 
-## Disclosure Via Return Values
-
-Returning witness-derived data from an exported circuit is a disclosure:
+An unsigned integer with an explicit range. Values outside the range are rejected at compile time.
 
 ```compact
-// compiler error: balance flows to return
-export circuit balanceExceeds(n: Uint<64>): Boolean {
-  return getBalance() > n;  // comparison result depends on witness data
-}
-
-// correct: declared disclosure
-export circuit balanceExceeds(n: Uint<64>): Boolean {
-  return disclose(getBalance()) > n;
-}
+const age: Uint<0..150> = 25;   // 0 to 149
+const idx: Uint<0..256> = 100;  // 0 to 255
 ```
 
-Even a comparison result counts. If the output can be determined by witness data, it's a disclosure.
+`Uint<0..n>` is a subtype of `Uint<0..m>` if `n ≤ m`.
 
----
+### Bytes\<n\>
 
-## Where to Place `disclose()`
-
-**Place it as close to the disclosure point as possible:**
+Exactly `n` bytes. Used for hashing, keys, identifiers.
 
 ```compact
-// Wrong: declares more than necessary
-export circuit process(data: PrivateData): [] {
-  const result = compute(disclose(data));  // too early
-  ledger = result;
-}
-
-// Right: declares only what's needed
-export circuit process(data: PrivateData): [] {
-  const result = compute(data);
-  ledger = disclose(result);  // only the final output
-}
+const key: Bytes<32> = pad(32, "midnight:example:key");
+const hash: Bytes<32> = persistentHash<Field>(42);
 ```
 
-The earlier you disclose, the more you declare public. Wait until the last possible moment.
+Fixed length. Padding fills with zeros if the input is short.
 
----
+### Opaque
 
-## Standard Library Exceptions
-
-Some functions handle witness data without explicit disclosure:
-
-| Function | Witness-tainted? | Why |
-|----------|-----------------|-----|
-| `transientCommit(e)` | **No** | Random nonce provides sufficient hiding |
-| `transientHash(e)` | Yes | Bare hash may not hide input |
+Allows foreign JavaScript data to pass through without inspection by Compact code. Circuits see only a hash.
 
 ```compact
-// no disclose() needed: transientCommit's nonce hides the value
-ledger commitment: Field;
-export circuit commit(v: Field): [] {
-  const nonce = freshNonce();
-  commitment = transientCommit(v, nonce);  // ok
-}
+witness getMessage(): Opaque<"string">;
+export ledger message: Opaque<"string">;
 
-// disclose() needed: transientHash doesn't hide
-ledger hashed: Field;
-export circuit storeHash(v: Field): [] {
-  hashed = disclose(transientHash(v));  // required
+export circuit post(): [] {
+  message = disclose(getMessage());
 }
 ```
 
-The nonce in `transientCommit` provides enough randomness that even someone who knows the value can't determine the commitment without the nonce.
+Circuits cannot inspect the contents, they can only store and retrieve the value. The value is opaque to Compact but transparent in TypeScript.
+
+**Important:** Opaque values are not hidden on-chain. They're plaintext, just not directly readable by circuits.
 
 ---
 
-## The Two-World Model, Revisited
+## Composite Types
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PRIVATE WORLD                           │
-│                                                             │
-│  witness getBalance(): Uint<64>;                          │
-│  returns: 1000  (never on chain)                        │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼ (disclose())
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                    PUBLIC WORLD                          │
-│                                                             │
-│  export ledger balance: Uint<64>;                        │
-│  balance = disclose(getBalance());                       │
-│  stored: 1000  (public, declared)                    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+### Tuples [T1, T2, ..., Tn]
+
+Fixed-length, heterogeneous, positional.
+
+```compact
+const pair: [Field, Boolean] = [42, true];
+const first = pair[0];   // Field
+const second = pair[1];  // Boolean
 ```
 
-Without `disclose()`, the compiler draws this line and prevents crossing.
+Access by index. Types must match exactly.
+
+### Vector<n, T>
+
+Homogeneous fixed-length sequence.
+
+```compact
+const v: Vector<4, Uint<8>> = [1, 2, 3, 4];
+const w = [10, 20, 30];  // inferred as Vector<3, ...>
+```
+
+Use `map` and `fold` for transformations.
+
+---
+
+## Program-Defined Types
+
+### struct
+
+Named collection of fields. Nominal typing, two structs with the same shape but different names are different types.
+
+```compact
+struct Point {
+  x: Uint<32>,
+  y: Uint<32>,
+}
+
+const p = Point { x: 10, y: 20 };
+const xVal = p.x;
+```
+
+Structs cannot be recursive.
+
+### enum
+
+Named set of variants. The first variant is the default value.
+
+```compact
+enum Direction { up, down, left, right }
+enum State { UNSET, SET }
+
+const d = Direction.up;
+const s = State.SET;
+```
+
+Useful for state machines and finite domains.
+
+---
+
+## Type Aliases
+
+### Structural alias
+
+Interchangeable with the underlying type.
+
+```compact
+type Pair<T> = [T, T];
+type Hash = Bytes<32>;
+```
+
+Can use `Hash` anywhere you use `Bytes<32>`, and vice versa.
+
+### Nominal alias
+
+Distinct type requiring explicit cast.
+
+```compact
+new type UserId = Bytes<32>;
+new type TokenAmount = Uint<64>;
+```
+
+Cannot use `Bytes<32>` where `UserId` is expected without a cast. This prevents mixing up IDs and amounts.
+
+---
+
+## Subtyping Rules
+
+| Rule | Meaning |
+|------|---------|
+| Any `T` is a subtype of itself | Identity |
+| `Uint<0..n>` is a subtype of `Uint<0..m>` if `n ≤ m` | Range widening |
+| `Uint<0..n>` is a subtype of `Field` if `n-1` is within field range | Field compatibility |
+| `[T1, ..., Tn]` is a subtype of `[S1, ..., Sn]` if each `Ti` is a subtype of `Si` | Tuple matching |
+
+Subtyping is used in assignment and parameter passing.
+
+---
+
+## Type Casting
+
+```compact
+const x: Uint<64> = 42;
+const y = x as Field;          // widen to Field
+const z = x as Uint<0..1000>;  // narrow, dynamic error if out of range
+const b = someBytes as UserId;   // nominal alias cast
+```
+
+- `as T` widens or narrows.
+- Narrowing that fails at runtime produces a transaction error.
+- Nominal aliases require explicit cast.
+
+---
+
+## Default Values
+
+Every type has a compile-time-known default:
+
+| Type | Default |
+|------|---------|
+| `Boolean` | `false` |
+| `Uint<n>`, `Uint<0..n>`, `Field` | `0` |
+| `Bytes<n>` | `n` zero bytes |
+| `[T1, ..., Tn]` | tuple of defaults |
+| `Vector<n, T>` | vector of defaults |
+| `struct` | each field to default |
+| `enum` | first variant |
+| `Opaque<"string">` | zero-length string |
+| `Opaque<"Uint8Array">` | zero-length array |
+
+```compact
+const empty = default<Bytes<32>>;
+const zero = default<Uint<64>>;
+```
+
+Used when initializing ledger fields without a constructor.
 
 ---
 
 ## Common Mistakes
 
-1. **Thinking `disclose()` encrypts.** It doesn't. It's a compile-time annotation. There's no runtime cost and no cryptographic transformation. If you disclose something, it's public.
+1. **Using `Field` when you need comparisons.** Field values can only be compared with `==` and `!=`. Use `Uint<0..n>` for ordered comparisons.
 
-2. **Forgetting indirect disclosure.** Passing witness data through `obfuscate(x) = x + 73` doesn't hide it. The compiler tracks data flow through every operation.
+2. **Assuming unbounded `Uint`.** `Uint<64>` is exactly 64 bits, wrapping at overflow. Use bounded types if you need range checking.
 
-3. **Not disclosing comparison results.** `return getBalance() > n` is a disclosure, the comparison reveals information about the balance. Use `disclose()`.
+3. **Confusing structural and nominal aliases.** `type Hash = Bytes<32>` is structural, fully interchangeable. `new type UserId = Bytes<32>` is nominal, requires explicit cast.
 
-4. **Disclosing too early.** Placing `disclose()` at the start of a function declares everything derived from that value as public. Place it at the last possible moment.
+4. **Forgetting that `as Uint<0..n>` can fail at runtime.** Narrowing to a bounded type with a value outside the range produces a transaction error, not a compiler error.
 
-5. **Assuming `transientHash` hides witness data.** It doesn't. Use `transientCommit` if you need hiding without disclosure. Or use `disclose(transientHash(...))`.
+5. **Using `Bytes<n>` when you need padding.** `Bytes<32>` is exactly 32 bytes. Use `pad(32, str)` to create fixed-length byte vectors from strings.
 
 ---
 
 ## Comparison Layer
 
-| Concept | Solidity | TypeScript | Compact |
-|---------|---------|-----------|---------|
-| Private data | `private` (still on chain) | `private` fields | `witness` |
-| Privacy mechanism | encryption (optional) | memory isolation | ZK proofs |
-| Disclosure | explicit in code | code logic | `disclose()` annotation |
-| Enforcement | contract code | convention | **compiler** |
-
-The key difference: in Solidity, privacy is a convention. In Compact, it's enforced by the compiler.
+| Concept | TypeScript | Rust | Compact |
+|---------|-----------|------|--------|
+| Sized int | N/A | `u64`, `u8` | `Uint<64>`, `Uint<8>` |
+| Bounded int | `number` (runtime check) | N/A | `Uint<0..n>` |
+| Byte array | `Buffer`, `Uint8Array` | `[u8; 32]` | `Bytes<32>` |
+| Tuple | `[type1, type2]` | `(T1, T2)` | `[T1, T2]` |
+| Struct | `class`, `interface` | `struct` | `struct` |
+| Enum | `enum` | `enum` | `enum` |
+| Type alias | `type A = B` | `type A = B` | `type A = B` or `new type A = B` |
+| Dynamic type | `any` | N/A | **not available** |
 
 ---
 
-## Quick Reference
+## Quick Recap
 
-| Scenario | Require `disclose()`? |
-|----------|---------------------|
-| Store witness value in ledger | Yes |
-| Return witness value from exported circuit | Yes |
-| Return comparison result | Yes |
-| Use witness data inside a circuit (no ledger access) | No |
-| Store `transientCommit(witnessValue)` in ledger | **No** (nonce hides) |
-| Store `transientHash(witnessValue)` in ledger | Yes |
-| Store `persistentCommit(witnessValue)` in ledger | **No** (nonce hides) |
-| Store `persistentHash(witnessValue)` in ledger | Yes |
+- All types are fixed-size at compile time. No `any`.
+- `Field` supports only `==` and `!=`. Use `Uint<0..n>` for ordered comparisons.
+- `Uint<0..n>` narrows to bounded range. `as Uint<0..n>` can fail at runtime.
+- `new type` creates nominal aliases, requires explicit cast.
+- `type` creates structural aliases, fully interchangeable.
+- Every type has a default value. Use `default<T>()`.
+- Opaque values are not hidden, they're just not directly readable by circuits.
 
 ---
 
 ## Cross-Links
 
-- **Previous:** [Witnesses](./chapter-06.md)  Private input mechanism
-- **Next:** [Data Types](./chapter-08.md)  Type system
-- **See also:** [Ledger State](./chapter-04.md)  The two-world model
-- **See also:** [Standard Library](./chapter-10.md)  Hash functions
-- **Examples:** [07.01 disclose](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/07.01.disclose.compact)
+- **Previous:** [Explicit Disclosure](./chapter-07.md)  Disclosure boundary
+- **Next:** [Ledger ADTs](./chapter-09.md)  Collection types for ledger state
+- **See also:** [Standard Library](./chapter-10.md)  Built-in types
+- **Examples:** [08.01 Primitives](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.01.primitives.compact) · [08.02 Composites](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/08.02.composites.compact)

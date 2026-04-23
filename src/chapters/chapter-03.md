@@ -1,229 +1,175 @@
-# Writing a Contract
+# VS Code Extension
 
-This note covers the structure of a Compact contract, the four mandatory pieces and how they fit together.
+This note covers the Visual Studio Code extension for Compact, which provides syntax highlighting, snippets, and integrated compilation.
+
+> **Docs:** [VS Code Extension](https://docs.midnight.network/compact/compilation-and-tooling/vscode-plugin)
 
 ---
 
 ## Intuition First
 
-Every Compact contract has four mandatory pieces:
+The VS Code extension adds Compact language support to Visual Studio Code. It highlights keywords, provides code snippets, and integrates with the compiler for error reporting.
 
-1. **`pragma`**, Declares the language version.
-2. **`export ledger`**, Public state that lives on-chain.
-3. **`witness`**, Declares where private data comes from (body is in TypeScript).
-4. **`export circuit`**, Logic that compiles to ZK circuits.
-
-The optional fifth piece is the **`constructor`**, runs once on deployment to initialize state.
-
-Think of it this way:
-
-- `export ledger` = what everyone can read
-- `witness` = where your secrets come from
-- `export circuit` = what you can prove happened
-- `constructor` = how it starts
+Installed via a VSIX file, not the VS Code marketplace. The extension is maintained by the Midnight team.
 
 ---
 
-## Minimal Contract
+## Installation
 
-```compact
-pragma language_version >= 0.22;
+### Download the VSIX
 
-export ledger message: Opaque<"string">;
+Download the latest release:
 
-export circuit post(msg: Opaque<"string">): [] {
-  message = disclose(msg);
+```bash
+curl -LO https://raw.githubusercontent.com/midnight-ntwrk/releases/gh-pages/artifacts/vscode-extension/compact-0.2.13/compact-0.2.13.vsix
+```
+
+### Install in VS Code
+
+1. Open VS Code
+2. Go to **Extensions** (Ctrl+Shift+X)
+3. Click **Install from VSIX...**
+4. Select the downloaded file
+
+---
+
+## Features
+
+| Feature | What it does |
+|---------|-------------|
+| Syntax highlighting | Keywords, types, circuits colored |
+| Code snippets | Insert common patterns |
+| Error highlighting | Inline compiler errors |
+| Build integration | Compile from VS Code |
+| File templates | New Compact files |
+
+---
+
+## Syntax Highlighting
+
+The extension recognizes:
+
+- **Keywords:** `circuit`, `witness`, `export`, `ledger`, `enum`, `struct`, `module`, `import`, `assert`
+- **Types:** `Uint<n>`, `Uint<0..n>`, `Field`, `Boolean`, `Bytes<n>`, `Map`, `Vector`
+- **Literals:** strings, numbers, booleans
+- **Comments:** `//` and `/* */`
+
+---
+
+## Code Snippets
+
+Type the snippet prefix and press Tab:
+
+| Prefix | Inserts |
+|--------|---------|
+| `ledger` | State declaration |
+| `constructor` | Constructor block |
+| `circuit` | Circuit function |
+| `witness` | Witness function |
+| `stdlib` | Standard library import |
+| `if` | If statement |
+| `for` | For loop |
+| `fold` | Fold expression |
+| `enum` | Enum definition |
+| `struct` | Struct definition |
+| `module` | Module definition |
+| `assert` | Assert statement |
+| `compact` | Full contract template |
+
+---
+
+## Building from VS Code
+
+### Add a Build Script
+
+In `package.json`:
+
+```json
+{
+  "scripts": {
+    "compact": "compact compile --vscode ./contracts/myContract.compact ./contracts/managed/myContract"
+  }
 }
 ```
 
-This is a bulletin board: anyone can post a message that becomes public. No privacy, just the simplest possible contract.
+The `--vscode` flag formats errors for VS Code.
+
+### Compile
+
+```bash
+yarn compact
+```
+
+Errors appear in the **Problems** panel.
+
+### Task Configuration
+
+For integrated building, create `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compile Compact",
+      "type": "shell",
+      "command": "npx compact compile --vscode --skip-zk ${file} ${workspaceFolder}/contracts/managed",
+      "group": "build",
+      "problemMatcher": [
+        "$compactException",
+        "$compactInternal",
+        "$compactCommandNotFound"
+      ]
+    }
+  ]
+}
+```
+
+Then press Ctrl+Shift+B to build.
 
 ---
 
-## Full Contract: Bulletin Board
+## Creating a New Contract
 
-A contract where one person posts a message, then takes it down. Ownership is verified via a derived public key.
+1. Open the command palette (Ctrl+Shift+P)
+2. Type **Snippets: Fill File with Snippet**
+3. Select **Compact**
+
+This creates a full contract template:
 
 ```compact
-pragma language_version >= 0.20;
+pragma language_version 0.22;
 
 import CompactStandardLibrary;
 
-export enum State { VACANT, OCCUPIED }
-
 export ledger state: State;
-export ledger message: Maybe<Opaque<"string">>;
-export ledger sequence: Counter;
-export ledger owner: Bytes<32>;
+
+enum State { UNSET, SET }
 
 constructor() {
-  state = State.VACANT;
-  message = none<Opaque<"string">>();
-  sequence.increment(1);
 }
 
-witness localSecretKey(): Bytes<32>;
-
-export circuit post(newMessage: Opaque<"string">): [] {
-  assert(state == State.VACANT, "Board occupied");
-  owner = disclose(publicKey(localSecretKey(), sequence as Field as Bytes<32>));
-  message = disclose(some<Opaque<"string">>(newMessage));
-  state = State.OCCUPIED;
+export circuit init(): [] {
 }
 
-export circuit takeDown(): Opaque<"string"> {
-  assert(state == State.OCCUPIED, "Board empty");
-  assert(owner == publicKey(localSecretKey(), sequence as Field as Bytes<32>), "Not owner");
-  const msg = message.value;
-  state = State.VACANT;
-  sequence.increment(1);
-  message = none<Opaque<"string">>();
-  return msg;
-}
-
-pure circuit publicKey(sk: Bytes<32>, seq: Bytes<32>): Bytes<32> {
-  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "bboard:pk:"), seq, sk]);
+export circuit interact(): [] {
 }
 ```
-
-Walk through what happens:
-
-1. **Deployment:** `constructor()` runs once. State is VACANT, message is none.
-2. **Post:** Caller's derived public key is stored as `owner`. The message is disclosed and stored.
-3. **TakeDown:** Verifies the caller knows the secret key that derives the stored public key. Returns the message.
-
-The key pattern here: **the secret key never leaves the caller's machine**. The public key is derived and stored. When `takeDown` runs, it verifies ownership by checking if `publicKey(callerSecret, sequence) == owner`. The ZK proof proves the caller knew the secret without revealing it.
-
----
-
-## The Four Pieces
-
-### Pragma & Import
-
-```compact
-pragma language_version >= 0.22;
-import CompactStandardLibrary;
-```
-
-The pragma declares minimum language version. The import brings in the standard library.
-
-### Ledger (Public State)
-
-```compact
-export ledger message: Opaque<"string">;
-export ledger counter: Uint<64>;
-export ledger state: State;
-```
-
-- `export` = readable from TypeScript (your DApp can see it)
-- `ledger` = on-chain, public state
-- Default initialization: zero or empty. Override in `constructor`.
-
-Types: `Uint<64>`, `Bytes<32>`, `Opaque<"string">`, `State`, `Counter`, `Map<K, V>`, `Set<T>`, `MerkleTree<n, T>`, and more.
-
-### Circuits (Logic)
-
-```compact
-export circuit get(): Opaque<"string"> {
-  return message;
-}
-
-export circuit post(msg: Opaque<"string">): [] {
-  message = disclose(msg);
-}
-```
-
-- `export` = callable from your DApp
-- `[]` = no return value (procedure-style)
-- `assert(condition, "message")` = runtime guard
-
-Circuits are the logic layer. They compile to ZK circuits.
-
-### Witnesses (Private Input)
-
-```compact
-witness secretKey(): Bytes<32>;
-```
-
-Declares a callback. The body is provided by your TypeScript DApp, not in Compact.
-
-### Constructor (Initialization)
-
-```compact
-constructor(initial: Uint<64>) {
-  value = disclose(initial);
-}
-```
-
-Runs once on deployment. Use `disclose()` for values that should be public from the start.
-
----
-
-## What Happens Under the Hood
-
-When you compile:
-
-```
-Your .compact file
-        ↓
-Compiler parses → type checks → generates ZKIR
-        ↓
-ZKIR + proving keys → ZK proof (at runtime)
-        ↓
-Proof submitted → validated → state updated
-```
-
-Your DApp calls `contract.circuits.post(context, msg)`. Behind the scenes:
-
-1. Your DApp invokes the circuit with the message.
-2. The witness function (`localSecretKey`) is called, returns the private key.
-3. The proof server generates a ZK proof of correct execution.
-4. The proof is submitted to the chain.
-5. Validators verify the proof, they never see the secret key.
-
----
-
-## Common Mistakes
-
-1. **Forgetting `disclose()` on ledger writes.** If you're writing a witness-derived value to the ledger, you need `disclose()`. The compiler catches this, but understanding why matters.
-
-2. **Not using `assert` on witness outputs.** Witnesses are untrusted. Always validate their outputs: `assert(balance > amount, "Insufficient balance")`.
-
-3. **Writing logic in the constructor.** The constructor runs once and is done. If you need ongoing logic, use circuits.
-
-4. **Returning witness data directly.** Returning a witness value from an exported circuit is a disclosure. Wrap it in `disclose()` or don't return it.
-
-5. **Using `export` everywhere.** `export` makes fields and circuits callable from outside. Internal helpers should not be exported.
-
----
-
-## Comparison Layer
-
-| Concept | Solidity | TypeScript | Compact |
-|---------|---------|-----------|---------|
-| State | `uint256 publicVar` | class fields | `export ledger f: T` |
-| Functions | `function name() external` | `method()` | `export circuit name(): T` |
-| Constructor | `constructor() { }` | `constructor()` | `constructor(params) { }` |
-| Private data | `private` (convention) | `private` fields | `witness` (stays local) |
-| Initialization | in constructor | in constructor | `constructor` + `disclose()` |
 
 ---
 
 ## Quick Recap
 
-- Every contract has: `pragma`, `export ledger`, `witness`, `export circuit`.
-- Optional: `constructor` for initialization.
-- `export ledger` = public on-chain state.
-- `witness` = private input (body in TypeScript).
-- `export circuit` = logic that compiles to ZK circuits.
-- `assert()` = runtime guard. Always validate witness outputs.
-- `disclose()` = marks intentional disclosure to the public world.
+- Install via VSIX file.
+- Syntax highlighting works automatically.
+- Use snippets for common patterns.
+- Add `--vscode` to compile command for error integration.
+- Use Ctrl+Shift+B to build.
 
 ---
 
 ## Cross-Links
 
-- **Previous:** [Setting Up the Compiler](./chapter-02.md), Toolchain setup
-- **Next:** [Ledger State](./chapter-04.md), Public vs private state model
-- **See also:** [Circuits](./chapter-05.md), How circuits work
-- **See also:** [Witnesses](./chapter-06.md), Private input mechanism
+- **Previous:** [Neovim Setup](./chapter-19.md)  Neovim editor
+- **Next:** [Testing and Debugging](./chapter-14.md)  Error handling
+- **See also:** [Setting Up the Compiler](./chapter-02.md)  Toolchain installation

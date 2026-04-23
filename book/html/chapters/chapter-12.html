@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Compact Grammar - Compact Book</title>
+        <title>Ledger ADTs - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,291 +174,287 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="compact-grammar"><a class="header" href="#compact-grammar">Compact Grammar</a></h1>
-<p>This note is a readable reference for Compact’s syntax, the rules that shape what you write. The formal grammar is EBNF; this note translates it into what you actually type.</p>
+                        <h1 id="ledger-adts"><a class="header" href="#ledger-adts">Ledger ADTs</a></h1>
+<p>This note covers the collection types available for on-chain state, when to use each and the tradeoffs.</p>
 <blockquote>
-<p><strong>Goal after this note:</strong> Read Compact fluently. Know what’s legal syntax vs. what’s a language rule.
-<strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-grammar">Compact Grammar</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>Compact’s grammar is deliberately TypeScript-adjacent, but the differences are load-bearing. TypeScript lets you write almost anything, Compact enforces structure at every level:</p>
+<p>Ledger ADTs are the data structures you use for on-chain state. They’re not like in-memory data structures in TypeScript, they’re persistent, on-chain, and their operations produce verifiable state transitions.</p>
+<p>Each type optimizes for a specific access pattern:</p>
 <ul>
-<li>Every expression has a type known at compile time.</li>
-<li>Every program element is one of a fixed set of forms.</li>
-<li>Operators have a fixed precedence order.</li>
-<li>Some TypeScript patterns (<code>return</code> in loops, mixed field separators, two-armed <code>if</code> as the “then” of another <code>if</code>) are simply not valid.</li>
+<li><strong>Counter</strong>, Low-contention atomic counters</li>
+<li><strong>Set</strong>, Membership tracking</li>
+<li><strong>Map</strong>, Key-value storage</li>
+<li><strong>List</strong>, Ordered queue</li>
+<li><strong>MerkleTree</strong>, Membership proofs with a single root</li>
+<li><strong>HistoricMerkleTree</strong>, Membership proofs across time</li>
 </ul>
-<p>The grammar isn’t a style guide. It’s the contract between you and the compiler. If your code follows the grammar, it compiles. If it doesn’t, it doesn’t.</p>
+<p>The choice matters because the on-chain representation affects what your circuits can prove.</p>
 <hr>
-<h2 id="program-structure"><a class="header" href="#program-structure">Program Structure</a></h2>
-<p>A Compact program is a flat sequence of program elements. There’s no nesting at the top level, modules contain elements, but the program itself is just one element after another:</p>
-<pre><code>program → program-element ⋯ program-element
-</code></pre>
-<p>Valid elements (in any order, subject to scope rules):</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Element</th><th>Keyword(s)</th><th>Purpose</th></tr>
-</thead>
-<tbody>
-<tr><td>Pragma</td><td><code>pragma</code></td><td>Version constraint</td></tr>
-<tr><td>Module</td><td><code>module</code></td><td>Namespace block</td></tr>
-<tr><td>Import</td><td><code>import</code></td><td>Bring in another module</td></tr>
-<tr><td>Include</td><td><code>include</code></td><td>Inline splice from file</td></tr>
-<tr><td>Struct</td><td><code>struct</code></td><td>Record type</td></tr>
-<tr><td>Enum</td><td><code>enum</code></td><td>Sum type</td></tr>
-<tr><td>Type alias</td><td><code>type</code> / <code>new type</code></td><td>Alias</td></tr>
-<tr><td>Ledger</td><td><code>ledger</code></td><td>On-chain state</td></tr>
-<tr><td>Witness</td><td><code>witness</code></td><td>Private input</td></tr>
-<tr><td>Constructor</td><td><code>constructor</code></td><td>Init</td></tr>
-<tr><td>Export</td><td><code>export</code></td><td>Entry point marker</td></tr>
-</tbody>
-</table>
-</div>
-<p>Module order rule: a module must be <strong>defined before it is imported</strong>. Circular imports are not allowed.</p>
-<hr>
-<h2 id="pragma"><a class="header" href="#pragma">Pragma</a></h2>
-<pre><code>pragma language_version &gt;= 0.22;
-pragma compiler_version &gt;= 0.30.0 &amp;&amp; !0.30.1;
-</code></pre>
-<p>Version expressions support <code>||</code>, <code>&amp;&amp;</code>, <code>!</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&gt;</code>, and grouping with <code>()</code>. Both <code>major.minor</code> and <code>major.minor.patch</code> forms are valid.</p>
-<p>Always put the pragma first. It’s the first thing the compiler reads.</p>
-<hr>
-<h2 id="module"><a class="header" href="#module">Module</a></h2>
-<pre><code>module Math&lt;T&gt; {
-  export circuit add(a: T, b: T): T { return a + b; }
-  circuit helper(x: T): T { return x; }  // private to Math
-}
-</code></pre>
-<p>Generic modules are specialized at import time:</p>
-<pre><code class="language-compact">import Math&lt;Field, 4&gt;;
-</code></pre>
-<p><code>export</code> makes a binding visible outside the module. Without it, the binding is private.</p>
-<hr>
-<h2 id="import"><a class="header" href="#import">Import</a></h2>
-<pre><code>import Math;                          // all exports
-import { add } from Math;             // specific
-import { add as plus } from Math;    // renamed
-import Math prefix M$;                // prefixed: M$add
-import Math&lt;Field, 4&gt;;               // specialized
-import "utils/Math";                 // from file path
-</code></pre>
-<p>File imports look for <code>.compact</code> in the same directory or relative path. Set the search path with <code>--compact-path</code> or <code>COMPACT_PATH</code>.</p>
-<hr>
-<h2 id="ledger-declaration"><a class="header" href="#ledger-declaration">Ledger Declaration</a></h2>
-<pre><code>ledger count: Counter;
-export ledger owner: Bytes&lt;32&gt;;
-export sealed ledger config: Uint&lt;32&gt;;
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Form</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>ledger x: T</code></td><td>Basic field, non-exported</td></tr>
-<tr><td><code>export ledger x: T</code></td><td>Readable from TypeScript</td></tr>
-<tr><td><code>sealed ledger x: T</code></td><td>Writeable only in constructor</td></tr>
-<tr><td><code>export sealed ledger x: T</code></td><td>Both</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="witness-declaration"><a class="header" href="#witness-declaration">Witness Declaration</a></h2>
-<pre><code>witness secretKey(): Bytes&lt;32&gt;;
-witness getItem&lt;T&gt;(index: Uint&lt;32&gt;): T;
-</code></pre>
-<p>Witnesses have no body in Compact. The body is provided by the TypeScript DApp. Generics are supported.</p>
-<hr>
-<h2 id="constructor"><a class="header" href="#constructor">Constructor</a></h2>
-<pre><code>constructor(sk: Bytes&lt;32&gt;, v: Uint&lt;64&gt;) {
-  authority = disclose(publicKey(round, sk));
-  value = disclose(v);
-}
-</code></pre>
-<p>Runs once on deployment. Parameters come from the deploy transaction. Use <code>disclose()</code> for values that should be public from the start.</p>
-<hr>
-<h2 id="circuit-definition"><a class="header" href="#circuit-definition">Circuit Definition</a></h2>
-<pre><code>circuit add(a: Field, b: Field): Field { return a + b; }
-export circuit get(): Uint&lt;64&gt; { return value; }
-export pure circuit hash&lt;T&gt;(v: T): Bytes&lt;32&gt; {
-  return persistentHash&lt;T&gt;(v);
-}
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Modifier</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>export</code></td><td>Callable from TypeScript</td></tr>
-<tr><td><code>pure</code></td><td>No ledger reads/writes, no witness calls</td></tr>
-</tbody>
-</table>
-</div>
-<p>Generic circuits must be specialized before export.</p>
-<hr>
-<h2 id="types"><a class="header" href="#types">Types</a></h2>
-<pre><code>Boolean
-Field
-Uint&lt;8&gt;
-Uint&lt;0..256&gt;
-Bytes&lt;32&gt;
-Opaque&lt;"string"&gt;
-Vector&lt;4, Field&gt;
-[Field, Boolean, Uint&lt;16&gt;]
-Maybe&lt;Field&gt;
-Map&lt;Bytes&lt;32&gt;, Uint&lt;64&gt;&gt;
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Form</th><th>What it is</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Uint&lt;n&gt;</code></td><td>Fixed-size unsigned, 0 to 2^n - 1</td></tr>
-<tr><td><code>Uint&lt;0..n&gt;</code></td><td>Bounded unsigned, 0 to n-1</td></tr>
-<tr><td><code>Vector&lt;N, T&gt;</code></td><td>Fixed-length homogeneous sequence</td></tr>
-<tr><td><code>[T1, T2, ...]</code></td><td>Fixed-length heterogeneous tuple</td></tr>
-<tr><td><code>tref</code></td><td>User-defined or stdlib type</td></tr>
-</tbody>
-</table>
-</div>
-<p>All types are fixed-size at compile time. No <code>any</code>, no <code>unknown</code>.</p>
-<hr>
-<h2 id="struct-and-enum"><a class="header" href="#struct-and-enum">Struct and Enum</a></h2>
-<pre><code>struct Point { x: Field, y: Field }
-struct Pair&lt;T&gt; { first: T; second: T }      // semicolons ok
-enum State { UNSET, SET }
-</code></pre>
-<p>Field separators must be consistent, all commas or all semicolons, not mixed. Trailing separator is allowed.</p>
-<hr>
-<h2 id="type-alias"><a class="header" href="#type-alias">Type Alias</a></h2>
-<pre><code>type Hash = Bytes&lt;32&gt;;              // structural, interchangeable
-new type UserId = Bytes&lt;32&gt;;       // nominal, requires explicit cast
-type V3&lt;T&gt; = Vector&lt;3, T&gt;;       // generic
-</code></pre>
-<p>Structural aliases are fully interchangeable with the underlying type. Nominal aliases are distinct types.</p>
-<hr>
-<h2 id="blocks-and-statements"><a class="header" href="#blocks-and-statements">Blocks and Statements</a></h2>
-<pre><code>block → { stmt ⋯ stmt }
-stmt  → if ( expr ) stmt
-      | stmt0
-stmt0 → expr;
-      | const cbinding ,⋯, cbinding;
-      | if ( expr ) stmt0 else stmt
-      | for (const id of nat .. nat) stmt
-      | for (const id of expr) stmt
-      | return expr;
-      | return;
-      | block
-</code></pre>
-<p><strong>Critical parsing rule:</strong> <code>stmt</code> and <code>stmt0</code> are split because a one-armed <code>if</code> <strong>cannot</strong> be the “then” branch of a two-armed <code>if</code>.</p>
-<pre><code class="language-compact">// VALID
-if (a) { x; } else { y; }
-if (b) { z; }
+<h2 id="counter"><a class="header" href="#counter">Counter</a></h2>
+<p>A simple unsigned counter. The key advantage over <code>Cell&lt;Uint&lt;64&gt;&gt;</code> is that <code>Counter</code> does not read the current value when incrementing, so transactions are less likely to be rejected due to contention.</p>
+<pre><code class="language-compact">ledger votes: Counter;
 
-// INVALID, syntax error
-if (a) if (b) { x; } else { y; }
+export circuit vote(): [] {
+  votes += 1;
+}
+
+export circuit retract(): [] {
+  votes -= 1;
+}
+
+export circuit getVotes(): Uint&lt;64&gt; {
+  return votes;
+}
 </code></pre>
-<p>The parser sees <code>if (a) if (b) { x; }</code> as the “then” of the outer <code>if</code>, and <code>else { y; }</code> has no matching <code>if</code>. Fix by adding braces:</p>
-<pre><code class="language-compact">if (a) { if (b) { x; } } else { y; }
-</code></pre>
-<hr>
-<h2 id="patterns"><a class="header" href="#patterns">Patterns</a></h2>
-<pre><code>x                          // simple
-[a, b]                     // tuple destructure
-[a, , c]                   // skip element
-{x, y}                    // struct destructure
-{x: myX, y}                // rename
-</code></pre>
-<p>Patterns are used in parameter positions and <code>const</code> bindings. They let you unpack tuples and structs concisely.</p>
-<hr>
-<h2 id="expressions-precedence"><a class="header" href="#expressions-precedence">Expressions: Precedence</a></h2>
-<p>Operators at higher levels bind more tightly:</p>
+<p>Operations:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Level</th><th>Operators</th><th>Notes</th></tr>
+<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
 </thead>
 <tbody>
-<tr><td><code>expr</code></td><td><code>? :</code>, <code>=</code>, <code>+=</code>, <code>-=</code></td><td>ternary, assignment</td></tr>
-<tr><td><code>expr0</code></td><td><code>||</code></td><td>logical or</td></tr>
-<tr><td><code>expr1</code></td><td><code>&amp;&amp;</code></td><td>logical and</td></tr>
-<tr><td><code>expr2</code></td><td><code>==</code>, <code>!=</code></td><td>equality</td></tr>
-<tr><td><code>expr3</code></td><td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&gt;</code></td><td>relational, non-associative</td></tr>
-<tr><td><code>expr4</code></td><td><code>as</code></td><td>type cast</td></tr>
-<tr><td><code>expr5</code></td><td><code>+</code>, <code>-</code></td><td>additive</td></tr>
-<tr><td><code>expr6</code></td><td><code>*</code></td><td>multiplicative</td></tr>
-<tr><td><code>expr7</code></td><td><code>!</code></td><td>logical not (prefix)</td></tr>
-<tr><td><code>expr8</code></td><td><code>[i]</code>, <code>.field</code>, <code>.method()</code></td><td>indexing, field access</td></tr>
-<tr><td><code>expr9</code></td><td>function calls, <code>map</code>, <code>fold</code>, literals</td><td>highest</td></tr>
+<tr><td>Increment</td><td><code>field += n</code></td><td>Add <code>n</code>, no read required</td></tr>
+<tr><td>Decrement</td><td><code>field -= n</code></td><td>Subtract <code>n</code>, errors if negative</td></tr>
+<tr><td>Read</td><td><code>field</code></td><td>Returns as <code>Uint&lt;64&gt;</code></td></tr>
+<tr><td>Compare</td><td><code>field.lessThan(n)</code></td><td>Returns <code>Boolean</code></td></tr>
 </tbody>
 </table>
 </div>
-<p><strong>Non-associative relational operators:</strong> <code>a &lt; b &lt; c</code> is a syntax error. Write <code>(a &lt; b) &amp;&amp; (b &lt; c)</code>.</p>
+<p><strong>Why low contention?</strong> A normal <code>Uint&lt;64&gt;</code> read-modify-write has three steps: read the value, add one, write back. Under concurrent calls, two transactions might read the same value and both write the same new value. <code>Counter</code> combines these steps atomically.</p>
 <hr>
-<h2 id="expression-forms"><a class="header" href="#expression-forms">Expression Forms</a></h2>
-<pre><code>map(fn, vec)                      // transform
-fold(fn, init, vec)               // accumulate
-slice&lt;4&gt;(v, start)             // sub-vector
-[x, ...y]                       // spread
-assert(cond, "msg")             // runtime guard
-disclose(expr)                   // explicit disclosure
-pad(32, "prefix")              // padded string literal
-default&lt;T&gt;                      // default value
+<h2 id="cell-plain-types"><a class="header" href="#cell-plain-types">Cell (Plain Types)</a></h2>
+<p>When you declare <code>ledger f: T</code> without a collection type, it’s implicitly a <code>Cell&lt;T&gt;</code>. Read and write operations use shorthand.</p>
+<pre><code class="language-compact">ledger owner: Bytes&lt;32&gt;;
+
+export circuit setOwner(addr: Bytes&lt;32&gt;): [] {
+  owner = disclose(addr);  // shorthand for owner.write(...)
+}
+
+export circuit getOwner(): Bytes&lt;32&gt; {
+  return owner;  // shorthand for owner.read()
+}
 </code></pre>
+<p><code>Cell&lt;T&gt;</code> is the default. Use it for single, mutable values.</p>
 <hr>
-<h2 id="anonymous-circuits-arrow-functions"><a class="header" href="#anonymous-circuits-arrow-functions">Anonymous Circuits (Arrow Functions)</a></h2>
-<pre><code>map((x) =&gt; x + 1, v)
-map((x: Field): Field =&gt; x + 1, v)
-map((x) =&gt; { return x + 1; }, v)
-map(double, v)                   // named circuit reference
+<h2 id="set"><a class="header" href="#set">Set</a></h2>
+<p>An unbounded set of unique values. Inserting a duplicate is a no-op.</p>
+<pre><code class="language-compact">ledger allowlist: Set&lt;Bytes&lt;32&gt;&gt;;
+
+export circuit addAddress(addr: Bytes&lt;32&gt;): [] {
+  allowlist.insert(disclose(addr));
+}
+
+export circuit isAllowed(addr: Bytes&lt;32&gt;): Boolean {
+  return allowlist.member(addr);
+}
 </code></pre>
-<p>Three forms:</p>
-<ol>
-<li><strong>Expression body:</strong> <code>=&gt; expr</code>, compact, good for single expressions</li>
-<li><strong>Block body:</strong> <code>=&gt; block</code>, for multi-statement logic</li>
-<li><strong>Named reference:</strong> <code>circuitName</code>, pass a named circuit</li>
-</ol>
-<p>Type annotations on arrow parameters are optional.</p>
+<p>Operations:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>Insert</td><td><code>set.insert(v)</code></td><td>Add value, duplicate is no-op</td></tr>
+<tr><td>Remove</td><td><code>set.remove(v)</code></td><td>Remove value</td></tr>
+<tr><td>Check</td><td><code>set.member(v)</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Empty check</td><td><code>set.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Size</td><td><code>set.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
+<tr><td>Reset</td><td><code>set.resetToDefault()</code></td><td>Clears the set</td></tr>
+</tbody>
+</table>
+</div>
+<p>Useful for allowlists, denylists, and membership tracking.</p>
 <hr>
-<h2 id="const-binding"><a class="header" href="#const-binding"><code>const</code> Binding</a></h2>
-<pre><code>const x = 42;
-const x: Field = 42;
-const [a, b] = pair;
-const {x, y}: Point = p;
-const a = 1, b = 2;           // multiple in one statement
+<h2 id="map"><a class="header" href="#map">Map</a></h2>
+<p>An unbounded key-value mapping. Values can be other ledger-state types (except <code>Kernel</code>).</p>
+<pre><code class="language-compact">ledger balances: Map&lt;Bytes&lt;32&gt;, Uint&lt;64&gt;&gt;;
+
+export circuit setBalance(addr: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
+  balances.insert(disclose(addr), disclose(amount));
+}
+
+export circuit getBalance(addr: Bytes&lt;32&gt;): Uint&lt;64&gt; {
+  return balances.lookup(addr);
+}
 </code></pre>
-<p>Variables are immutable after binding. No <code>let</code>, no reassignment.</p>
+<p>Operations:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>Insert</td><td><code>map.insert(k, v)</code></td><td>Add or update key-value</td></tr>
+<tr><td>Lookup</td><td><code>map.lookup(k)</code></td><td>Returns value (errors if missing)</td></tr>
+<tr><td>Check</td><td><code>map.member(k)</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Remove</td><td><code>map.remove(k)</code></td><td>Delete key-value</td></tr>
+<tr><td>Empty check</td><td><code>map.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Size</td><td><code>map.size()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="nested-maps"><a class="header" href="#nested-maps">Nested Maps</a></h3>
+<pre><code class="language-compact">ledger fld: Map&lt;Boolean, Map&lt;Field, Counter&gt;&gt;;
+
+export circuit increment(b: Boolean, n: Field, k: Uint&lt;16&gt;): [] {
+  fld.lookup(b).lookup(n) += disclose(k);
+}
+</code></pre>
+<p>Rules for nesting:</p>
+<ul>
+<li>Nested values must be initialized before first use.</li>
+<li>The entire indirection chain must be used in a single expression.</li>
+<li>Only <code>Map</code> values can contain ledger-state types.</li>
+<li><code>Kernel</code> cannot be nested.</li>
+</ul>
 <hr>
-<h2 id="what-the-grammar-doesnt-tell-you"><a class="header" href="#what-the-grammar-doesnt-tell-you">What the Grammar Doesn’t Tell You</a></h2>
-<p>The grammar tells you what’s syntactically valid. It doesn’t tell you what passes the type checker or the witness protection program. Three layers of validation:</p>
-<ol>
-<li><strong>Syntax</strong>, Does it parse? (grammar)</li>
-<li><strong>Types</strong>, Does it type-check? (type system)</li>
-<li><strong>Privacy</strong>, Is disclosure declared? (witness protection)</li>
-</ol>
-<p>A program that passes the grammar might still fail at step 2 or 3. The error messages distinguish these.</p>
+<h2 id="list"><a class="header" href="#list">List</a></h2>
+<p>An unbounded ordered list. Elements are pushed and popped from the front.</p>
+<pre><code class="language-compact">ledger queue: List&lt;Field&gt;;
+
+export circuit enqueue(v: Field): [] {
+  queue.pushFront(disclose(v));
+}
+
+export circuit dequeue(): [] {
+  queue.popFront();
+}
+
+export circuit peek(): Field {
+  return queue.head().value;
+}
+</code></pre>
+<p>Operations:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>Push</td><td><code>list.pushFront(v)</code></td><td>Add to front</td></tr>
+<tr><td>Pop</td><td><code>list.popFront()</code></td><td>Remove from front</td></tr>
+<tr><td>Head</td><td><code>list.head()</code></td><td>Returns <code>Maybe&lt;T&gt;</code></td></tr>
+<tr><td>Empty check</td><td><code>list.isEmpty()</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Length</td><td><code>list.length()</code></td><td>Returns <code>Uint&lt;64&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><code>head()</code> returns <code>Maybe&lt;T&gt;</code>, check <code>.isSome</code> before accessing <code>.value</code>.</p>
+<hr>
+<h2 id="merkletree"><a class="header" href="#merkletree">MerkleTree</a></h2>
+<p>A bounded Merkle tree of depth <code>n</code> (2 ≤ n ≤ 32). Use when you need to prove membership against the <strong>current</strong> root.</p>
+<pre><code class="language-compact">ledger members: MerkleTree&lt;8, Bytes&lt;32&gt;&gt;;
+
+export circuit addMember(leaf: Bytes&lt;32&gt;): [] {
+  members.insert(disclose(leaf));
+}
+
+export circuit checkMembership(root: MerkleTreeDigest): Boolean {
+  return members.checkRoot(root);
+}
+</code></pre>
+<p>Operations:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Syntax</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td>Insert</td><td><code>merkle.insert(v)</code></td><td>Add leaf, update root</td></tr>
+<tr><td>Check</td><td><code>merkle.checkRoot(digest)</code></td><td>Verify leaf against current root</td></tr>
+<tr><td>Full check</td><td><code>merkle.isFull()</code></td><td>Returns <code>Boolean</code></td></tr>
+<tr><td>Root</td><td><code>merkle.root()</code></td><td>Read-only in TypeScript</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>What this enables:</strong> A compact proof that a value is a member of the set, without revealing the value or the full set. The proof is a Merkle path, a sequence of sibling hashes from the leaf to the root.</p>
+<p><strong>Use case:</strong> Prove you know a secret in a set without revealing the secret.</p>
+<hr>
+<h2 id="historicmerkletree"><a class="header" href="#historicmerkletree">HistoricMerkleTree</a></h2>
+<p>Like <code>MerkleTree</code> but retains past roots. Use when you need to prove membership against <strong>any past root</strong>.</p>
+<pre><code class="language-compact">ledger commitments: HistoricMerkleTree&lt;16, Bytes&lt;32&gt;&gt;;
+
+export circuit addCommitment(leaf: Bytes&lt;32&gt;): [] {
+  commitments.insert(disclose(leaf));
+}
+
+export circuit verifyOldMembership(root: MerkleTreeDigest): Boolean {
+  return commitments.checkRoot(root);  // accepts any past root
+}
+</code></pre>
+<p><strong>What this enables:</strong> Proving that a commitment existed at a past point in time. Useful for nullifier-based systems where you need to prevent double-spending.</p>
+<hr>
+<h2 id="kernel"><a class="header" href="#kernel">Kernel</a></h2>
+<p>A special ledger-state type that provides access to built-in ledger operations.</p>
+<pre><code class="language-compact">ledger kern: Kernel;
+
+export circuit checkTime(deadline: Uint&lt;64&gt;): Boolean {
+  return kern.blockTimeLessThan(deadline);
+}
+
+export circuit selfAddress(): ContractAddress {
+  return kern.self();
+}
+</code></pre>
+<p>Operations:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><code>kern.self()</code></td><td>Returns this contract’s address</td></tr>
+<tr><td><code>kern.blockTimeLessThan(t)</code></td><td>Check time against deadline</td></tr>
+<tr><td><code>kern.balance()</code></td><td>Check native token balance</td></tr>
+<tr><td><code>kern.mintShielded(...)</code></td><td>Mint shielded tokens</td></tr>
+<tr><td><code>kern.mintUnshielded(...)</code></td><td>Mint unshielded tokens</td></tr>
+<tr><td><code>kern.checkpoint()</code></td><td>Create a checkpoint for upgrades</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>Kernel</code> cannot be nested in a <code>Map</code>.</p>
+<hr>
+<h2 id="choosing-the-right-adt"><a class="header" href="#choosing-the-right-adt">Choosing the Right ADT</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Use case</th><th>ADT</th><th>Why</th></tr>
+</thead>
+<tbody>
+<tr><td>Single mutable value</td><td><code>Cell&lt;T&gt;</code></td><td>Simple, direct access</td></tr>
+<tr><td>Atomic counter (low contention)</td><td><code>Counter</code></td><td>Increment without read</td></tr>
+<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td><td>O(1) insert, check, remove</td></tr>
+<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td><td>Key-value with O(1) lookup</td></tr>
+<tr><td>Nested per-key storage</td><td><code>Map&lt;K, Map&lt;K2, V&gt;&gt;</code></td><td>Two-level lookup</td></tr>
+<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td><td>Push/pop from front</td></tr>
+<tr><td>Current membership proof</td><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Single-root membership</td></tr>
+<tr><td>Historical membership proof</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Multi-root membership</td></tr>
+<tr><td>Block time, tokens, address</td><td><code>Kernel</code></td><td>Built-in operations</td></tr>
+</tbody>
+</table>
+</div>
 <hr>
 <h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
 <ol>
 <li>
-<p><strong>Chained relational operators.</strong> <code>a &lt; b &lt; c</code> is a syntax error. Relational operators are non-associative, use explicit parentheses.</p>
+<p><strong>Using <code>Map</code> when <code>Set</code> suffices.</strong> If you only need membership check, use <code>Set</code>. <code>Map</code> has more overhead for the value storage.</p>
 </li>
 <li>
-<p><strong><code>if</code> without braces on one side of <code>else</code>.</strong> <code>if (a) if (b) { } else { }</code> parses as an orphan <code>else</code>. Use braces.</p>
+<p><strong>Forgetting that <code>List</code> pushes from front.</strong> <code>pushFront</code> adds to the front, <code>popFront</code> removes from the front. This is a stack, not a queue, the name reflects the storage order, not the access pattern.</p>
 </li>
 <li>
-<p><strong>Struct separator inconsistency.</strong> <code>struct S { a: T, b: T; }</code> mixes separators, not allowed. All commas or all semicolons.</p>
+<p><strong>Not initializing nested values.</strong> Before accessing <code>map.lookup(k).lookup(k2)</code>, the inner <code>Map</code> for <code>k</code> must exist. The compiler requires the entire chain in one expression.</p>
 </li>
 <li>
-<p><strong>Generic without specialization.</strong> <code>export circuit id&lt;T&gt;(x: T): T { return x; }</code> is exported but generic, invalid. Specialize first: <code>circuit idField = id&lt;Field&gt;;</code>.</p>
+<p><strong>Using <code>MerkleTree</code> when you need historical proofs.</strong> <code>MerkleTree</code> only proves against the current root. If you need past roots, use <code>HistoricMerkleTree</code>.</p>
 </li>
 <li>
-<p><strong>Assignment vs equality.</strong> <code>if (x = 42)</code> is assignment, not comparison. In Compact this evaluates to <code>42</code> (truthy), which is almost certainly not what you want. Use <code>==</code>.</p>
+<p><strong>Nesting <code>Kernel</code> in <code>Map</code>.</strong> Not allowed. <code>Kernel</code> is a special type with built-in operations, it cannot be nested.</p>
 </li>
 </ol>
 <hr>
@@ -466,37 +462,40 @@ const a = 1, b = 2;           // multiple in one statement
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Feature</th><th>TypeScript</th><th>Rust</th><th>Compact</th></tr>
+<tr><th>ADT</th><th>Solidity equivalent</th><th>Note</th></tr>
 </thead>
 <tbody>
-<tr><td>Block body in arrow</td><td><code>x =&gt; { return x; }</code></td><td>`</td><td>x</td></tr>
-<tr><td>Type cast</td><td><code>(x as T)</code></td><td><code>x as T</code></td><td><code>x as T</code> same</td></tr>
-<tr><td>Tuple destructuring</td><td><code>const [a, b] = x</code></td><td><code>let [a, b] = x</code></td><td><code>const [a, b] = x</code> same</td></tr>
-<tr><td>Struct fields</td><td><code>,</code> or <code>;</code> (flexible)</td><td><code>,</code> only</td><td>must be consistent</td></tr>
-<tr><td>Assignment in condition</td><td>allowed</td><td>disallowed</td><td><code>x = y</code> parses but warns</td></tr>
-<tr><td>Rel chaining</td><td><code>a &lt; b &lt; c</code></td><td><code>a &lt; b &amp;&amp; b &lt; c</code></td><td>syntax error</td></tr>
-<tr><td>Generic params</td><td><code>&lt;T&gt;</code></td><td><code>&lt;T&gt;</code></td><td><code>&lt;T&gt;</code> or <code>&lt;#N&gt;</code></td></tr>
+<tr><td><code>Cell&lt;T&gt;</code></td><td><code>uint256</code></td><td>Simple storage slot</td></tr>
+<tr><td><code>Counter</code></td><td>N/A</td><td>Atomic increment</td></tr>
+<tr><td><code>Set&lt;T&gt;</code></td><td><code>mapping → bool</code></td><td>Unique membership</td></tr>
+<tr><td><code>Map&lt;K, V&gt;</code></td><td><code>mapping(K ⇒ V)</code></td><td>Key-value</td></tr>
+<tr><td><code>List&lt;T&gt;</code></td><td><code>uint256[]</code></td><td>Ordered with overhead</td></tr>
+<tr><td><code>MerkleTree</code></td><td>N/A</td><td>ZK-native, not Solidity-native</td></tr>
+<tr><td><code>Kernel</code></td><td>built-in</td><td>Block time, tokens</td></tr>
 </tbody>
 </table>
 </div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>A program is a flat sequence of elements. A module must be defined before imported.</li>
-<li>Pragma first, everything else in any order.</li>
-<li>Struct/enum fields: all commas or all semicolons, not mixed.</li>
-<li>Relational operators are non-associative: <code>a &lt; b &lt; c</code> is a syntax error.</li>
-<li>One-armed <code>if</code> cannot be the “then” of a two-armed <code>if</code>, use braces.</li>
-<li>Generics must be specialized before export.</li>
-<li>Three validation layers: syntax → types → privacy (disclosure).</li>
+<li><strong>Counter</strong>, Low contention, atomic increment without read.</li>
+<li><strong>Cell</strong>, Default for single values. Read/write shorthand.</li>
+<li><strong>Set</strong>, Membership tracking, unique values.</li>
+<li><strong>Map</strong>, Key-value with nested ledger types.</li>
+<li><strong>List</strong>, Ordered stack, push/pop from front.</li>
+<li><strong>MerkleTree</strong>, Current-root membership proofs.</li>
+<li><strong>HistoricMerkleTree</strong>, Any-past-root membership proofs.</li>
+<li><strong>Kernel</strong>, Built-in operations (time, tokens, address). Cannot be nested.</li>
+<li>Choose based on access patterns. The ADT affects what your circuits can prove.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
 <li><strong>Previous:</strong> <a href="./chapter-08.html">Data Types</a>  Type system</li>
-<li><strong>Next:</strong> <a href="./chapter-13.html">Keywords Reference</a>  Every keyword</li>
-<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Built-in functions</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></li>
+<li><strong>Next:</strong> <a href="./chapter-10.html">Standard Library</a>  Hashing and token functions</li>
+<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment patterns</li>
+<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Merkle tree functions</li>
+<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact">09.01 ADTs</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact">09.02 Merkle Trees</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact">09.03 Kernel</a></li>
 </ul>
 
                     </main>
@@ -534,6 +533,22 @@ const a = 1, b = 2;           // multiple in one statement
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

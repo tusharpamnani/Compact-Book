@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger State - Compact Book</title>
+        <title>Keywords Reference - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -174,176 +174,179 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-state"><a class="header" href="#ledger-state">Ledger State</a></h1>
-<p>This note explains the ledger  Midnight’s public state layer  and how it relates to private state.</p>
+                        <h1 id="keywords-reference"><a class="header" href="#keywords-reference">Keywords Reference</a></h1>
+<p>Every keyword in Compact, organized by purpose. Use this as a lookup when you’re unsure what a keyword does or whether it’s the right tool.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a> · <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-and-maintaining-public-state">Ledger State</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-keywords">Compact Keywords</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>The ledger is Midnight’s <strong>public world</strong>. Every node on the network stores it. Everyone can read it.</p>
-<p>Private data (witnesses) lives on the user’s local machine and never touches the chain. The two are connected by <code>disclose()</code>, a compile-time annotation that marks intentional disclosure.</p>
-<p>The key insight: <strong>privacy is the default, not opt-in.</strong> Private data stays private unless you explicitly mark it for disclosure.</p>
+<p>Compact has fewer keywords than TypeScript, no <code>class</code>, <code>function</code>, <code>interface</code>, <code>let</code>, <code>var</code>, <code>null</code>, <code>this</code>, <code>while</code>. What remains is lean and purposeful.</p>
+<p>The keywords fall into four groups:</p>
+<ol>
+<li><strong>Declaration keywords</strong>, define things: <code>circuit</code>, <code>struct</code>, <code>enum</code>, <code>ledger</code>, <code>witness</code>, <code>module</code>, <code>type</code>, <code>new type</code></li>
+<li><strong>Expression keywords</strong>, operate on values: <code>as</code>, <code>assert</code>, <code>disclose</code>, <code>default</code>, <code>map</code>, <code>fold</code>, <code>pad</code>, <code>slice</code></li>
+<li><strong>Control keywords</strong>, manage flow: <code>if</code>, <code>else</code>, <code>for</code>, <code>return</code>, <code>const</code></li>
+<li><strong>Module keywords</strong>, organize code: <code>export</code>, <code>import</code>, <code>include</code>, <code>pragma</code>, <code>prefix</code>, <code>from</code></li>
+</ol>
+<p>A few TypeScript keywords are reserved for future use (<code>await</code>, <code>class</code>, <code>interface</code>, <code>let</code>, <code>null</code>, etc.) and cannot be used as identifiers. Identifiers starting with <code>__compact</code> are reserved for the compiler.</p>
 <hr>
-<h2 id="the-two-worlds"><a class="header" href="#the-two-worlds">The Two Worlds</a></h2>
+<h2 id="module-and-visibility"><a class="header" href="#module-and-visibility">Module and Visibility</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Property</th><th><code>export ledger</code></th><th>Private state (witnesses)</th></tr>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
 </thead>
 <tbody>
-<tr><td>Where it lives</td><td>Every network node</td><td>User’s local storage</td></tr>
-<tr><td>Who can read it</td><td>Everyone</td><td>Only the owner</td></tr>
-<tr><td>On-chain representation</td><td>Plaintext value</td><td>Nothing (commitment or nothing)</td></tr>
-<tr><td>How it’s updated</td><td>Via ZK proof</td><td>Never touches the chain</td></tr>
-<tr><td>Update mechanism</td><td>Ledger assignment</td><td>Witness callbacks</td></tr>
+<tr><td><code>export</code></td><td>Makes a binding visible outside its scope. At top level, marks entry points callable from TypeScript.</td><td><code>export circuit f(): T { }</code></td></tr>
+<tr><td><code>module</code></td><td>Defines a named namespace. Contains program elements.</td><td><code>module M { export circuit f() {} }</code></td></tr>
+<tr><td><code>import</code></td><td>Brings exported bindings from a module into scope. Also imports the built-in stdlib.</td><td><code>import M;</code> / <code>import CompactStandardLibrary;</code></td></tr>
+<tr><td><code>from</code></td><td>Used in selective import to name the source module.</td><td><code>import { f } from M;</code></td></tr>
+<tr><td><code>prefix</code></td><td>Attaches a namespace prefix to all imported names.</td><td><code>import Math prefix M$;</code></td></tr>
+<tr><td><code>include</code></td><td>Splices the contents of another file inline at the current location.</td><td><code>include "shared/types.compact";</code></td></tr>
+<tr><td><code>pragma</code></td><td>Declares a constraint on compiler or language version.</td><td><code>pragma language_version &gt;= 0.22;</code></td></tr>
 </tbody>
 </table>
 </div>
 <hr>
-<h2 id="ledger-state-updates"><a class="header" href="#ledger-state-updates">Ledger State Updates</a></h2>
-<p><img src="../images/ledger_update_flow.png" alt="Ledger Update Flow"></p>
-<p>The ledger update happens atomically with the proof. Either the proof is valid and the state changes, or it isn’t and nothing changes.</p>
+<h2 id="declaration-keywords"><a class="header" href="#declaration-keywords">Declaration Keywords</a></h2>
+<h3 id="types-and-data-structures"><a class="header" href="#types-and-data-structures">Types and Data Structures</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>struct</code></td><td>Declares a named record type with typed fields. Nominal typing.</td><td><code>struct Point { x: Field, y: Field }</code></td></tr>
+<tr><td><code>enum</code></td><td>Declares a named sum type. First variant is the default.</td><td><code>enum State { UNSET, SET }</code></td></tr>
+<tr><td><code>type</code></td><td>Declares a structural type alias, fully interchangeable with the underlying type.</td><td><code>type Hash = Bytes&lt;32&gt;;</code></td></tr>
+<tr><td><code>new type</code></td><td>Declares a nominal type alias, distinct from the underlying type. Requires explicit cast.</td><td><code>new type UserId = Bytes&lt;32&gt;;</code></td></tr>
+<tr><td><code>Opaque</code></td><td>Declares a foreign JavaScript value opaque to circuits. Currently <code>"string"</code> and <code>"Uint8Array"</code>.</td><td><code>Opaque&lt;"string"&gt;</code></td></tr>
+<tr><td><code>Boolean</code></td><td>The boolean type. Values: <code>true</code> and <code>false</code>.</td><td><code>const flag: Boolean = true;</code></td></tr>
+<tr><td><code>Field</code></td><td>Unsigned integer up to the ZK field order. Comparisons only via <code>==</code> and <code>!=</code>.</td><td><code>const f: Field = 42;</code></td></tr>
+<tr><td><code>Uint</code></td><td>Unsigned integer. Sized (<code>Uint&lt;n&gt;</code>) or bounded (<code>Uint&lt;0..n&gt;</code>).</td><td><code>Uint&lt;64&gt;</code>, <code>Uint&lt;0..256&gt;</code></td></tr>
+<tr><td><code>Bytes</code></td><td>Fixed-length byte vector. Requires size argument.</td><td><code>Bytes&lt;32&gt;</code></td></tr>
+<tr><td><code>Vector</code></td><td>Homogeneous fixed-length sequence. Shorthand for same-type tuple.</td><td><code>Vector&lt;4, Field&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="ledger-and-witnesses"><a class="header" href="#ledger-and-witnesses">Ledger and Witnesses</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ledger</code></td><td>Declares a field in the on-chain public state.</td><td><code>ledger count: Counter;</code></td></tr>
+<tr><td><code>export ledger</code></td><td>Makes a ledger field readable from TypeScript.</td><td><code>export ledger owner: Bytes&lt;32&gt;;</code></td></tr>
+<tr><td><code>sealed ledger</code></td><td>Makes a ledger field writeable only during initialization.</td><td><code>sealed ledger config: Uint&lt;32&gt;;</code></td></tr>
+<tr><td><code>witness</code></td><td>Declares a private-input callback. Body is in TypeScript.</td><td><code>witness secretKey(): Bytes&lt;32&gt;;</code></td></tr>
+<tr><td><code>constructor</code></td><td>Defines the initialization function, called once on deployment.</td><td><code>constructor(v: Field) { }</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="circuits"><a class="header" href="#circuits">Circuits</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>circuit</code></td><td>Defines a named circuit, compiles to a ZK circuit.</td><td><code>circuit add(a, b): Field { }</code></td></tr>
+<tr><td><code>export circuit</code></td><td>Makes a circuit callable from TypeScript (entry point).</td><td><code>export circuit mint(): [] { }</code></td></tr>
+<tr><td><code>pure</code></td><td>Asserts a circuit has no side effects, no ledger reads/writes, no witness calls.</td><td><code>pure circuit hash(v: T): Bytes&lt;32&gt; { }</code></td></tr>
+<tr><td><code>contract</code></td><td>Reserved for declaring external contract types. Not fully implemented in 1.0.</td><td></td></tr>
+</tbody>
+</table>
+</div>
 <hr>
-<h2 id="declaring-ledger-fields"><a class="header" href="#declaring-ledger-fields">Declaring Ledger Fields</a></h2>
-<pre><code class="language-compact">ledger val: Field;                                    // basic field
-export ledger cnt: Counter;                           // exported, readable
-sealed ledger config: Uint&lt;32&gt;;                       // write-once
-export sealed ledger mapping: Map&lt;Boolean, Field&gt;;  // exported + sealed
+<h2 id="expression-keywords"><a class="header" href="#expression-keywords">Expression Keywords</a></h2>
+<h3 id="operations-on-values"><a class="header" href="#operations-on-values">Operations on Values</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>as</code></td><td>Type cast. Widens, narrows, or converts between compatible types.</td><td><code>x as Field</code>, <code>bytes as UserId</code></td></tr>
+<tr><td><code>assert</code></td><td>Runtime guard. Halts the circuit with an error message if the condition is false.</td><td><code>assert(balance &gt;= amount, "Insufficient")</code></td></tr>
+<tr><td><code>disclose</code></td><td>Compile-time annotation. Declares that witness data is intentionally going public.</td><td><code>disclose(witness())</code></td></tr>
+<tr><td><code>default</code></td><td>Produces the default value of a type.</td><td><code>default&lt;Bytes&lt;32&gt;&gt;</code></td></tr>
+<tr><td><code>pad</code></td><td>Pads a string literal with zero bytes to a fixed length. Produces <code>Bytes&lt;n&gt;</code>.</td><td><code>pad(32, "midnight:example")</code></td></tr>
+<tr><td><code>map</code></td><td>Higher-order transformation over a vector or tuple.</td><td><code>map((x) =&gt; x + 1, v)</code></td></tr>
+<tr><td><code>fold</code></td><td>Higher-order accumulation over a vector or tuple.</td><td><code>fold((acc, x) =&gt; acc + x, 0, v)</code></td></tr>
+<tr><td><code>slice</code></td><td>Extracts a contiguous sub-vector of a given size from a larger vector.</td><td><code>slice&lt;4&gt;(v, start)</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="literals-and-special-forms"><a class="header" href="#literals-and-special-forms">Literals and Special Forms</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>true</code></td><td>Boolean true value.</td><td><code>const flag = true;</code></td></tr>
+<tr><td><code>false</code></td><td>Boolean false value. Default value of <code>Boolean</code>.</td><td><code>const flag: Boolean = false;</code></td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Keyword</th><th>What it does</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>if</code></td><td>Conditional branching. One-armed (<code>if (cond) { }</code>) or two-armed (<code>if (cond) { } else { }</code>).</td><td><code>if (state == SET) { }</code></td></tr>
+<tr><td><code>else</code></td><td>The alternative branch of a two-armed <code>if</code>.</td><td><code>if (a) { } else { }</code></td></tr>
+<tr><td><code>for</code></td><td>Bounded iteration. Over a numeric range or a vector/tuple.</td><td><code>for (const i of 0..10) { }</code></td></tr>
+<tr><td><code>of</code></td><td>Used in <code>for</code> loop to name the iteration variable.</td><td><code>for (const x of vec) { }</code></td></tr>
+<tr><td><code>return</code></td><td>Exits a circuit or constructor and returns a value. Cannot be used inside a <code>for</code> body.</td><td><code>return x;</code></td></tr>
+<tr><td><code>const</code></td><td>Declares an immutable local variable binding.</td><td><code>const x = 42;</code></td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="reserved-for-future-use"><a class="header" href="#reserved-for-future-use">Reserved for Future Use</a></h2>
+<p>These TypeScript/JavaScript keywords are reserved, they cannot be used as identifiers in Compact 1.0 but may have meaning in future versions:</p>
+<p><code>await</code>, <code>break</code>, <code>case</code>, <code>catch</code>, <code>class</code>, <code>continue</code>, <code>debugger</code>, <code>delete</code>, <code>do</code>, <code>extends</code>, <code>finally</code>, <code>function</code>, <code>implements</code>, <code>in</code>, <code>instanceof</code>, <code>interface</code>, <code>let</code>, <code>null</code>, <code>package</code>, <code>private</code>, <code>protected</code>, <code>public</code>, <code>static</code>, <code>super</code>, <code>switch</code>, <code>this</code>, <code>throw</code>, <code>try</code>, <code>typeof</code>, <code>var</code>, <code>void</code>, <code>while</code>, <code>with</code>, <code>yield</code></p>
+<p><strong>Practical impact:</strong> If you have a TypeScript background and instinctively reach for <code>let</code>, <code>const</code>, or <code>var</code>, reach for <code>const</code> in Compact. If you reach for <code>interface</code> or <code>class</code>, use <code>struct</code>. If you reach for <code>null</code>, use <code>none&lt;T&gt;()</code> or <code>default&lt;T&gt;()</code>.</p>
+<hr>
+<h2 id="compiler-reserved-prefix"><a class="header" href="#compiler-reserved-prefix">Compiler-Reserved Prefix</a></h2>
+<p>Any identifier beginning with <code>__compact</code> is reserved for the compiler. Using one is a static error:</p>
+<pre><code class="language-compact">const __compact_internal = 1;  // error: reserved prefix
 </code></pre>
+<hr>
+<h2 id="quick-lookup-by-task"><a class="header" href="#quick-lookup-by-task">Quick Lookup by Task</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Modifier</th><th>Meaning</th></tr>
+<tr><th>Task</th><th>Keyword</th></tr>
 </thead>
 <tbody>
-<tr><td><code>export</code></td><td>Readable from TypeScript (your DApp)</td></tr>
-<tr><td><code>sealed</code></td><td>Writeable only during initialization</td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><code>ledger</code> without modifiers = basic, non-exported field</li>
-<li><code>export ledger</code> = readable by your DApp</li>
-<li><code>sealed ledger</code> = writeable during initialization only</li>
-<li><code>export sealed ledger</code> = both</li>
-</ul>
-<p>All ledger fields initialize to their type’s default (zero, empty, first variant, etc.). The constructor can override them.</p>
-<hr>
-<h2 id="the-disclose-boundary"><a class="header" href="#the-disclose-boundary">The <code>disclose()</code> Boundary</a></h2>
-<p><code>disclose()</code> is a <strong>compile-time annotation</strong>, not encryption. It tells the compiler: “I am intentionally disclosing witness data.”</p>
-<pre><code class="language-compact">// Without disclose(): compiler error
-export circuit record(): [] {
-  stored = getSecret();   // error: potential witness disclosure
-}
-
-// With disclose(): compiles
-export circuit record(): [] {
-  stored = disclose(getSecret());  // ok: declared
-}
-</code></pre>
-<p>The compiler tracks witness data through every operation, arithmetic, type conversions, function calls. If witness data could reach the ledger without <code>disclose()</code>, you get a compiler error.</p>
-<p><strong>What this means:</strong> You cannot accidentally leak private data. The compiler enforces the privacy boundary.</p>
-<hr>
-<h2 id="when-to-use-export-ledger"><a class="header" href="#when-to-use-export-ledger">When to Use <code>export ledger</code></a></h2>
-<p><strong>Good candidates for <code>export ledger</code>:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it belongs on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Global invariants (total supply, reserve balance)</td><td>Everyone needs to see them</td></tr>
-<tr><td>State flags others react to</td><td>Needed for coordination</td></tr>
-<tr><td>Commitments to private values (the hash, not the value)</td><td>Proves existence without revealing</td></tr>
-<tr><td>Data your frontend needs to read directly</td><td>Otherwise you can’t display it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Bad candidates:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it doesn’t belong on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Per-user balances</td><td>Only one user cares</td></tr>
-<tr><td>Personal data</td><td>Privacy violation</td></tr>
-<tr><td>Any value belonging to only one user</td><td>No one else needs it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Heuristic:</strong> If removing this field would break another user’s ability to interact with the contract, it belongs in <code>export ledger</code>.</p>
-<hr>
-<h2 id="the-commitment-pattern"><a class="header" href="#the-commitment-pattern">The Commitment Pattern</a></h2>
-<p><img src="../images/ledger_commitment_pattern.png" alt="Commitment Pattern"></p>
-<p>If <code>export ledger</code> puts values on-chain as plaintext, and private state keeps values off-chain entirely, how do you verify something about private state?</p>
-<p><strong>Answer: commitments.</strong> Store the hash on-chain. Keep the value off-chain. Prove knowledge of the value without revealing it.</p>
-<pre><code class="language-compact">export ledger balanceCommitments: Map&lt;Bytes&lt;32&gt;, Bytes&lt;32&gt;&gt;;
-
-export circuit commitBalance(value: Uint&lt;64&gt;): [] {
-  const nonce = freshNonce();
-  const commitment = persistentCommit&lt;Uint&lt;64&gt;&gt;(value, nonce);
-  balanceCommitments.insert(disclose(callerAddress()), disclose(commitment));
-}
-</code></pre>
-<p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
-<hr>
-<h2 id="commitment-tools"><a class="header" href="#commitment-tools">Commitment Tools</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Function</th><th>Output</th><th>Persists?</th><th>For ledger?</th><th>Witness-tainted?</th></tr>
-</thead>
-<tbody>
-<tr><td><code>transientHash</code></td><td><code>Field</code></td><td>No</td><td>No</td><td>Yes</td></tr>
-<tr><td><code>transientCommit</code></td><td><code>Field</code></td><td>No</td><td>No</td><td><strong>No</strong></td></tr>
-<tr><td><code>persistentHash</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-<tr><td><code>persistentCommit</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
-</tbody>
-</table>
-</div>
-<ul>
-<li><strong>Persistent:</strong> Survives contract upgrades. Use for long-term storage.</li>
-<li><strong>Transient:</strong> Does not survive upgrades. Use for temporary computations.</li>
-<li><strong>Commit (vs hash):</strong> Includes a random nonce. The nonce hides the input even if the value is known. Use when the value might be guessable.</li>
-</ul>
-<hr>
-<h2 id="ledger-state-types"><a class="header" href="#ledger-state-types">Ledger-State Types</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Type</th><th>What it is</th></tr>
-</thead>
-<tbody>
-<tr><td><code>T</code> (any type)</td><td>A single <code>Cell&lt;T&gt;</code>, readable and writable</td></tr>
-<tr><td><code>Counter</code></td><td>Unsigned counter with atomic increment (low contention)</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td>Unbounded set of unique values</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td>Unbounded key-value mapping</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td>Unbounded ordered list (pushFront/popFront)</td></tr>
-<tr><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Bounded Merkle tree of depth n (2 ≤ n ≤ 32)</td></tr>
-<tr><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Like <code>MerkleTree</code> but retains past roots</td></tr>
-<tr><td><code>Kernel</code></td><td>Built-in operations (block time, tokens, address)</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="choosing-the-right-type"><a class="header" href="#choosing-the-right-type">Choosing the Right Type</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>ledger f: T</code> (Cell)</td></tr>
-<tr><td>Monotonically growing counter (low contention)</td><td><code>Counter</code></td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (current root only)</td><td><code>MerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (any past root)</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>Block time, tokens, contract address</td><td><code>Kernel</code></td></tr>
+<tr><td>Define a circuit</td><td><code>circuit</code></td></tr>
+<tr><td>Make it callable from DApp</td><td><code>export circuit</code></td></tr>
+<tr><td>Make a circuit side-effect free</td><td><code>pure circuit</code></td></tr>
+<tr><td>Declare on-chain state</td><td><code>ledger</code></td></tr>
+<tr><td>Make state readable from DApp</td><td><code>export ledger</code></td></tr>
+<tr><td>Make state write-once</td><td><code>sealed ledger</code></td></tr>
+<tr><td>Provide private input</td><td><code>witness</code></td></tr>
+<tr><td>Initialize on deploy</td><td><code>constructor</code></td></tr>
+<tr><td>Define a record type</td><td><code>struct</code></td></tr>
+<tr><td>Define a sum type</td><td><code>enum</code></td></tr>
+<tr><td>Create a distinct type</td><td><code>new type</code></td></tr>
+<tr><td>Group code in a namespace</td><td><code>module</code></td></tr>
+<tr><td>Bring in another module</td><td><code>import</code></td></tr>
+<tr><td>Mark something public</td><td><code>export</code></td></tr>
+<tr><td>Declare a version</td><td><code>pragma</code></td></tr>
+<tr><td>Guard at runtime</td><td><code>assert</code></td></tr>
+<tr><td>Cast a type</td><td><code>as</code></td></tr>
+<tr><td>Declare disclosure</td><td><code>disclose</code></td></tr>
+<tr><td>Default value</td><td><code>default</code></td></tr>
+<tr><td>Transform a vector</td><td><code>map</code></td></tr>
+<tr><td>Accumulate a vector</td><td><code>fold</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -351,68 +354,38 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 <h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
 <ol>
 <li>
-<p><strong>Treating <code>export ledger</code> as encrypted.</strong> It isn’t. Everything in <code>export ledger</code> is plaintext and readable by everyone. If you need privacy, use the commitment pattern.</p>
+<p><strong>Using <code>type</code> when you need <code>new type</code>.</strong> <code>type UserId = Bytes&lt;32&gt;</code> is structural, <code>Bytes&lt;32&gt;</code> and <code>UserId</code> are interchangeable. Use <code>new type UserId = Bytes&lt;32&gt;</code> if you want them to be distinct.</p>
 </li>
 <li>
-<p><strong>Forgetting that witnesses never touch the chain.</strong> Witness data stays local. Only the proof goes on-chain. You cannot store witness data directly, you must <code>disclose()</code> it first.</p>
+<p><strong>Using <code>let</code> instead of <code>const</code>.</strong> Compact has no <code>let</code>. All local variables are declared with <code>const</code> and are immutable after binding.</p>
 </li>
 <li>
-<p><strong>Reusing nonces.</strong> Two commitments with the same nonce and value are identical on-chain. Always use a fresh nonce.</p>
+<p><strong>Using <code>null</code> instead of <code>none&lt;T&gt;()</code>.</strong> There’s no <code>null</code> in Compact. Optional values use <code>Maybe&lt;T&gt;</code>: <code>none&lt;T&gt;()</code> or <code>some&lt;T&gt;(v)</code>.</p>
 </li>
 <li>
-<p><strong>Putting per-user data in the ledger.</strong> If only one user cares about a value, it shouldn’t be in the ledger. It’s a privacy leak.</p>
+<p><strong>Using <code>class</code> instead of <code>struct</code>.</strong> Compact has no <code>class</code>. Use <code>struct</code> for record types.</p>
 </li>
 <li>
-<p><strong>Using <code>transientHash</code> for ledger storage.</strong> Transient values don’t survive contract upgrades. Use <code>persistentHash</code> or <code>persistentCommit</code>.</p>
+<p><strong>Forgetting <code>pure</code> when you want to document purity.</strong> <code>pure</code> is both documentation and a compiler-enforced assertion. If your circuit has no side effects, mark it <code>pure</code>, the compiler will catch if you accidentally add one later.</p>
 </li>
 </ol>
 <hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Concept</th><th>Solidity</th><th>Rust</th><th>Compact</th></tr>
-</thead>
-<tbody>
-<tr><td>Public state</td><td><code>uint256 publicVar</code></td><td>storage fields</td><td><code>export ledger f: T</code></td></tr>
-<tr><td>Private state</td><td><code>private uint256</code> (still on chain)</td><td><code>u64</code> in memory</td><td><code>witness</code> (stays local)</td></tr>
-<tr><td>State updates</td><td>direct assignment</td><td><code>storage.write()</code></td><td>via ZK proof</td></tr>
-<tr><td>Reading state</td><td><code>Contract.state()</code></td><td>direct read</td><td><code>ledger(state)</code></td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
-<ul>
-<li>The ledger is public on-chain state. Everyone can read it.</li>
-<li>Private data (witnesses) stays local. Only the proof goes on-chain.</li>
-<li><code>disclose()</code> marks intentional disclosure. It’s a compile-time annotation, not encryption.</li>
-<li>Store commitments on-chain. Keep values off-chain. Prove knowledge without revealing.</li>
-<li>Always use a fresh nonce for commitments. Reuse = privacy leak.</li>
-<li><code>transient*</code> doesn’t survive upgrades. <code>persistent*</code> does.</li>
-<li><code>transientCommit</code> can commit private values without <code>disclose()</code>. The random nonce provides sufficient hiding.</li>
-</ul>
-<hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
-<li><strong>Next:</strong> <a href="./chapter-05.html">Circuits</a>  How circuits work</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  The disclose() boundary in depth</li>
-<li><strong>See also:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Map, Set, MerkleTree details</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-12.html">Compact Grammar</a>  Syntax rules</li>
+<li><strong>Next:</strong> <a href="./chapter-14.html">Testing and Debugging</a>  Errors and troubleshooting</li>
+<li><strong>See also:</strong> <a href="./chapter-08.html">Data Types</a>  Type system</li>
+<li><strong>See also:</strong> <a href="./chapter-05.html">Circuits</a>  Circuit syntax</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-08.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-19.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-10.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -420,13 +393,10 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-08.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-19.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-10.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Standard Library - Compact Book</title>
+        <title>Witnesses - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,231 +174,200 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="standard-library"><a class="header" href="#standard-library">Standard Library</a></h1>
-<p>This note covers the built-in functions and types that come with <code>import CompactStandardLibrary</code>.</p>
+                        <h1 id="witnesses"><a class="header" href="#witnesses">Witnesses</a></h1>
+<p>This note explains witnesses, the mechanism that brings private data into circuits without ever touching the chain.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/standard-library">Standard Library</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.01.hashing.compact">10.01 Hashing</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.02.tokens.compact">10.02 Tokens</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.03.elliptic.compact">10.03 Elliptic Curve</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-witnesses-for-private-state-management">Declaring Witnesses</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>The standard library is built into the compiler, it’s not a file on disk. Import it once at the top of your contract, and you have access to hashing, merkle trees, token operations, elliptic curves, and more.</p>
-<p>Understanding what the standard library provides means knowing what you don’t need to implement yourself: cryptographic primitives, merkle proofs, token transfers.</p>
+<p>A witness is a callback function. You declare its type in Compact, but the body is provided by your TypeScript DApp at runtime. When a circuit calls a witness, it runs locally on the user’s device, the value it returns never goes on-chain. Instead, a ZK proof proves the circuit executed correctly given that value.</p>
+<p>The name “witness” comes from ZK literature. In a proof, the witness is the secret data that proves a statement is true, without revealing what that data is. In Compact, witnesses are exactly that: secret inputs that prove the circuit ran correctly.</p>
 <hr>
-<h2 id="common-types"><a class="header" href="#common-types">Common Types</a></h2>
-<h3 id="maybe"><a class="header" href="#maybe">Maybe<t></t></a></h3>
-<p>An optional value, either <code>Some</code> or <code>None</code>.</p>
-<pre><code class="language-compact">circuit some&lt;T&gt;(value: T): Maybe&lt;T&gt;;
-circuit none&lt;T&gt;(): Maybe&lt;T&gt;;
-
-const h = list.head();
-assert(h.isSome, "List is empty");
-return h.value;
-</code></pre>
-<p>Methods:</p>
+<h2 id="mental-model"><a class="header" href="#mental-model">Mental Model</a></h2>
+<p><strong>Witnesses are private inputs, not parameters.</strong></p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Method</th><th>Returns</th><th>What it does</th></tr>
+<tr><th>Parameters (to circuits)</th><th>Witnesses</th></tr>
 </thead>
 <tbody>
-<tr><td><code>v.isSome</code></td><td><code>Boolean</code></td><td>True if present</td></tr>
-<tr><td><code>v.isNone</code></td><td><code>Boolean</code></td><td>True if absent</td></tr>
-<tr><td><code>v.value</code></td><td><code>T</code></td><td>The value (valid if <code>isSome</code>)</td></tr>
+<tr><td>Passed explicitly when calling</td><td>Provided by DApp at runtime</td></tr>
+<tr><td>Visible in the proof inputs</td><td>Stay local, never on chain</td></tr>
+<tr><td>Public (anyone can see them)</td><td>Private (only the caller knows)</td></tr>
+<tr><td>Compiler enforces type</td><td>DApp provides implementation</td></tr>
 </tbody>
 </table>
 </div>
-<h3 id="eithera-b"><a class="header" href="#eithera-b">Either&lt;A, B&gt;</a></h3>
-<p>A value that is one of two types.</p>
-<pre><code class="language-compact">struct Either&lt;A, B&gt; {
-  isLeft: Boolean;
-  left: A;
-  right: B;
-}
-
-circuit left&lt;A, B&gt;(value: A): Either&lt;A, B&gt;;
-circuit right&lt;A, B&gt;(value: B): Either&lt;A, B&gt;;
-
-// send to a contract
-sendUnshielded(color, amount, left&lt;ContractAddress, UserAddress&gt;(kernel.self()));
-
-// send to a user
-sendUnshielded(color, amount, right&lt;ContractAddress, UserAddress&gt;(userAddr));
-</code></pre>
-<p>Useful for disjunction and polymorphic return types.</p>
+<p>When you call a circuit, you pass public parameters. The circuit can also call witnesses internally. The witness returns a value, and the circuit uses it, but only the proof goes on-chain.</p>
 <hr>
-<h2 id="contract-types"><a class="header" href="#contract-types">Contract Types</a></h2>
-<pre><code class="language-compact">struct ContractAddress { bytes: Bytes&lt;32&gt;; }
-struct UserAddress { bytes: Bytes&lt;32&gt;; }
-struct MerkleTreeDigest { field: Field; }
-
-struct MerkleTreePath&lt;#n, T&gt; {
-  leaf: T;
-  path: Vector&lt;n, MerkleTreePathEntry&gt;;
-}
-
-struct ShieldedCoinInfo {
-  nonce: Bytes&lt;32&gt;;
-  color: Bytes&lt;32&gt;;
-  value: Uint&lt;128&gt;;
+<h2 id="the-flow"><a class="header" href="#the-flow">The Flow</a></h2>
+<p><img src="../images/witness_circuit_flow.png" alt="Witness + Circuit Flow"></p>
+<hr>
+<h2 id="declaring-a-witness"><a class="header" href="#declaring-a-witness">Declaring a Witness</a></h2>
+<pre><code class="language-compact">witness secretKey(): Bytes&lt;32&gt;;
+witness getBalance(addr: Bytes&lt;32&gt;): Uint&lt;64&gt;;
+witness userNonce(): Field;
+witness getItem&lt;T&gt;(index: Uint&lt;32&gt;): T;  // generic
+</code></pre>
+<p>Witness declarations have no body. The body is provided by your TypeScript DApp.</p>
+<hr>
+<h2 id="calling-a-witness"><a class="header" href="#calling-a-witness">Calling a Witness</a></h2>
+<pre><code class="language-compact">export circuit clear(): [] {
+  const sk = secretKey();           // call witness: returns private data
+  const pk = publicKey(round, sk); // compute with it: still private
+  assert(authority == pk, "Not authorized");
+  state = State.UNSET;
+  round.increment(1);
 }
 </code></pre>
-<p>These are the building blocks for addresses, merkle proofs, and shielded tokens.</p>
+<p>The witness call happens locally. The ZK proof proves the computation was correct, without revealing <code>sk</code>.</p>
 <hr>
-<h2 id="hashing-and-commitment"><a class="header" href="#hashing-and-commitment">Hashing and Commitment</a></h2>
-<p>This is the most commonly used part of the standard library. Privacy patterns rely on these functions.</p>
-<p>| Function | Output | Persists? | For ledger? | Witness-tainted? |
-|–––––|––––|———–|————|——————|—————–|—————–|
-| <code>transientHash</code> | <code>Field</code> | No | No | Yes |
-| <code>transientCommit</code> | <code>Field</code> | No | No | <strong>No</strong> |
-| <code>persistentHash</code> | <code>Bytes&lt;32&gt;</code> | Yes | Yes | Yes |
-| <code>persistentCommit</code> | <code>Bytes&lt;32&gt;</code> | Yes | Yes | <strong>No</strong> |</p>
-<p><strong>Key distinction:</strong> Commit functions include a random nonce. Hash functions don’t. This matters for ledger storage and witness data.</p>
-<pre><code class="language-compact">// NOT for ledger storage, transient
-const h = transientHash&lt;[Field, Field]&gt;([a, b]);
-const commit = transientCommit&lt;Field&gt;(secret, nonce);
-
-// FOR ledger storage, persistent
-circuit publicKey(round: Field, sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
-  return persistentHash&lt;Vector&lt;3, Bytes&lt;32&gt;&gt;&gt;(
-    [pad(32, "midnight:lock:pk"),
-    round as Bytes&lt;32&gt;,
-    sk
-  ]);
-}
-
-const commitment = persistentCommit&lt;Uint&lt;64&gt;&gt;(balance, nonce);
-</code></pre>
-<p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
-<p><strong>Why <code>transientCommit</code> doesn’t require <code>disclose()</code>:</strong> The random nonce provides sufficient hiding. Even someone who knows the input can’t determine the commitment without the nonce.</p>
-<hr>
-<h2 id="merkle-tree-functions"><a class="header" href="#merkle-tree-functions">Merkle Tree Functions</a></h2>
-<p>For membership proofs:</p>
-<pre><code class="language-compact">export circuit verifyMembership(): [] {
-  const path = getMembershipPath();
-  const root = merkleTreePathRoot&lt;8, Bytes&lt;32&gt;&gt;(path);
-  assert(members.checkRoot(root), "Not a member");
+<h2 id="the-compiler-tracks-witness-data"><a class="header" href="#the-compiler-tracks-witness-data">The Compiler Tracks Witness Data</a></h2>
+<p>The compiler tracks witness data through every operation, arithmetic, type conversions, struct construction, function calls. Once data comes from a witness, it’s “tainted”, the compiler knows it’s private.</p>
+<pre><code class="language-compact">export circuit example(): [] {
+  const s = getSecret();
+  const doubled = s + s;              // still witness data
+  const converted = s as Uint&lt;64&gt;;    // still witness data
+  ledger = doubled;                  // compiler error: undeclared disclosure
 }
 </code></pre>
-<p>Functions:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Function</th><th>What it does</th></tr>
-</thead>
-<tbody>
-<tr><td><code>merkleTreePathRoot&lt;n, T&gt;(path)</code></td><td>Computes root from path</td></tr>
-<tr><td><code>members.checkRoot(digest)</code></td><td>Verifies leaf against current root</td></tr>
-</tbody>
-</table>
-</div>
-<p>Your DApp provides the membership path. The circuit verifies it against the on-chain root.</p>
+<p>This is the <strong>witness protection program</strong>, the compiler prevents accidental disclosure of private data.</p>
 <hr>
-<h2 id="elliptic-curve-functions"><a class="header" href="#elliptic-curve-functions">Elliptic Curve Functions</a></h2>
-<p>For cryptographic operations on the native curve:</p>
-<pre><code class="language-compact">circuit ecMulGenerator(b: Field): NativePoint;
-circuit ecMul(a: NativePoint, b: Field): NativePoint;
-circuit ecAdd(a: NativePoint, b: NativePoint): NativePoint;
-circuit hashToCurve&lt;T&gt;(value: T): NativePoint;
-</code></pre>
-<p>Use cases:</p>
-<ul>
-<li><strong>Key derivation:</strong> <code>hashToCurve(secretKey)</code> produces a public key point.</li>
-<li><strong>Signatures:</strong> <code>ecMul(generator, hash)</code> and point arithmetic.</li>
-<li><strong>Commitment:</strong> Commit to a value as a point on the curve.</li>
-</ul>
-<hr>
-<h2 id="block-time-functions"><a class="header" href="#block-time-functions">Block Time Functions</a></h2>
-<pre><code class="language-compact">circuit blockTimeLt(time: Uint&lt;64&gt;): Boolean;
-circuit blockTimeGte(time: Uint&lt;64&gt;): Boolean;
-</code></pre>
-<p>These check the current block time against a deadline. Use for time-locked operations.</p>
-<hr>
-<h2 id="token-functions"><a class="header" href="#token-functions">Token Functions</a></h2>
-<h3 id="native-token"><a class="header" href="#native-token">Native Token</a></h3>
-<pre><code class="language-compact">nativeToken(): Bytes&lt;32&gt;;
-tokenType(domainSep: Bytes&lt;32&gt;, contract: ContractAddress): Bytes&lt;32&gt;;
-</code></pre>
-<h3 id="unshielded-operations"><a class="header" href="#unshielded-operations">Unshielded Operations</a></h3>
-<pre><code class="language-compact">mintUnshieldedToken(domainSep, value, recipient): Bytes&lt;32&gt;
-sendUnshielded(color, amount, recipient): []
-receiveUnshielded(color, amount): []
-unshieldedBalanceLt(color, amount): Boolean
-unshieldedBalanceGte(color, amount): Boolean
-</code></pre>
-<p>Unshielded operations act on public balances. <strong>Tip:</strong> Prefer <code>unshieldedBalanceLt</code> over <code>unshieldedBalance</code> to avoid transaction contention on exact balance values.</p>
-<pre><code class="language-compact">// Bad: two users might have the same balance
-if (unshieldedBalance(color) &gt;= amount) { ... }
+<h2 id="when-disclosure-is-required"><a class="header" href="#when-disclosure-is-required">When Disclosure Is Required</a></h2>
+<p>When witness data needs to flow into the public ledger, wrap it in <code>disclose()</code>:</p>
+<pre><code class="language-compact">// Without: compiler error
+export circuit record(): [] {
+  balance = getBalance();  // error: witness data going to ledger
+}
 
-// Good: one user having balance X doesn't conflict with another having balance X
-if (unshieldedBalanceLt(color, amount) == false) { ... }  // balance &gt;= amount
+// With: compiles
+export circuit record(): [] {
+  balance = disclose(getBalance());  // ok: declared
+}
 </code></pre>
-<h3 id="shielded-operations"><a class="header" href="#shielded-operations">Shielded Operations</a></h3>
-<pre><code class="language-compact">mintShieldedToken(domainSep, value, nonce, recipient): ShieldedCoinInfo
-receiveShielded(coin: ShieldedCoinInfo): []
-sendShielded(input, recipient, value): ShieldedSendResult
-sendImmediateShielded(input, target, value): ShieldedSendResult
-shieldedBurnAddress(): Either&lt;ZswapCoinPublicKey, ContractAddress&gt;
-evolveNonce(index, nonce): Bytes&lt;32&gt;
+<p><code>disclose()</code> does not encrypt. It’s a compile-time annotation that says “I’m intentionally making this public.”</p>
+<hr>
+<h2 id="the-compiler-error"><a class="header" href="#the-compiler-error">The Compiler Error</a></h2>
+<p>When you forget <code>disclose()</code>, the compiler tells you exactly where the witness data came from:</p>
+<pre><code>Exception: line 6 char 11:
+  potential witness-value disclosure must be declared but is not:
+    witness value potentially disclosed:
+      the return value of witness getBalance at line 2 char 1
+    nature of the disclosure:
+      ledger operation might disclose the witness value
 </code></pre>
-<p>Shielded operations work with private values. The coin contains a commitment to the value, not the value itself.</p>
-<hr>
-<h2 id="when-to-use-each"><a class="header" href="#when-to-use-each">When to Use Each</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Scenario</th><th>Function</th><th>Why</th></tr>
-</thead>
-<tbody>
-<tr><td>Privacy-preserving commitment</td><td><code>persistentCommit</code></td><td>Nonce hides input</td></tr>
-<tr><td>Public commitment</td><td><code>persistentHash</code></td><td>No nonce needed</td></tr>
-<tr><td>Temporary computation</td><td><code>transientCommit</code></td><td>Doesn’t persist</td></tr>
-<tr><td>Ledger storage</td><td><code>persistent*</code></td><td>Survives upgrades</td></tr>
-<tr><td>Membership proof</td><td><code>MerkleTree</code></td><td>ZK-friendly</td></tr>
-<tr><td>Time-locked operation</td><td><code>blockTimeLt</code></td><td>Deadline check</td></tr>
-<tr><td>Public transfer</td><td><code>sendUnshielded</code></td><td>Simple, public</td></tr>
-<tr><td>Private transfer</td><td><code>sendShielded</code></td><td>ZK proof required</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
+<p>This trace tells you:</p>
 <ol>
-<li>
-<p><strong>Using <code>transientHash</code> for ledger storage.</strong> Transient values don’t survive contract upgrades. Use <code>persistentHash</code> or <code>persistentCommit</code>.</p>
-</li>
-<li>
-<p><strong>Reusing nonces.</strong> Two commitments with the same nonce and value are identical. Always use a fresh nonce.</p>
-</li>
-<li>
-<p><strong>Using <code>transientHash</code> for witness data without <code>disclose()</code>.</strong> <code>transientHash</code> is witness-tainted. If you store the result in the ledger, you need <code>disclose()</code>.</p>
-</li>
-<li>
-<p><strong>Using <code>unshieldedBalance</code> for contention-prone checks.</strong> Everyone having the same balance competes. Use <code>unshieldedBalanceLt</code> for threshold checks instead.</p>
-</li>
-<li>
-<p><strong>Assuming <code>ecMul</code> is safe without validation.</strong> EC operations can produce invalid points. Validate outputs when needed.</p>
-</li>
+<li>Where the witness data originated (<code>getBalance</code>)</li>
+<li>Where it tried to flow (the ledger assignment)</li>
 </ol>
+<hr>
+<h2 id="indirect-disclosure"><a class="header" href="#indirect-disclosure">Indirect Disclosure</a></h2>
+<p>The compiler catches disclosure even when witness data travels through helper circuits:</p>
+<pre><code class="language-compact">circuit obfuscate(x: Field): Field {
+  return x + 73;  // output is still witness data
+}
+
+export circuit record(): [] {
+  const s = getBalance() as Field;
+  const x = obfuscate(s);
+  balance = x as Bytes&lt;32&gt;;  // compiler catches this
+}
+</code></pre>
+<p>The compiler’s abstract interpreter follows witness taint through every operation. You cannot hide witness data by passing it through arithmetic, structs, or helper functions.</p>
+<hr>
+<h2 id="place-disclosure-as-close-as-possible"><a class="header" href="#place-disclosure-as-close-as-possible">Place Disclosure As Close As Possible</a></h2>
+<pre><code class="language-compact">// Bad: declares broader scope
+export circuit process(data: PrivateData): [] {
+  const result = compute(disclose(data));  // discloses too much
+  ledger = result;
+}
+
+// Good: discloses at the boundary
+export circuit process(data: PrivateData): [] {
+  const result = compute(data);
+  ledger = disclose(result);  // discloses only what's needed
+}
+</code></pre>
+<p>Place <code>disclose()</code> as close to the disclosure point as possible. This minimizes what you’re declaring as public.</p>
+<hr>
+<h2 id="standard-library-exceptions"><a class="header" href="#standard-library-exceptions">Standard Library Exceptions</a></h2>
+<p>Some functions can handle witness data without explicit disclosure:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Function</th><th>Witness-tainted?</th><th>Why</th></tr>
+</thead>
+<tbody>
+<tr><td><code>transientCommit(e)</code></td><td><strong>No</strong></td><td>Random nonce provides sufficient hiding</td></tr>
+<tr><td><code>transientHash(e)</code></td><td>Yes</td><td>Bare hash may not hide input</td></tr>
+</tbody>
+</table>
+</div>
+<pre><code class="language-compact">// no disclose() needed
+ledger commitment: Field;
+export circuit commit(v: Field): [] {
+  const nonce = freshNonce();
+  commitment = transientCommit(v, nonce);  // nonce hides the value
+}
+</code></pre>
+<p>The nonce provides enough randomness that even knowing the value doesn’t help. This is why <code>transientCommit</code> doesn’t require <code>disclose()</code>, but <code>transientHash</code> does.</p>
+<hr>
+<h2 id="critical-witness-results-are-untrusted"><a class="header" href="#critical-witness-results-are-untrusted">Critical: Witness Results Are Untrusted</a></h2>
+<blockquote>
+<p><strong>Do not assume in your contract that the code of any <code>witness</code> function is the code that you wrote.</strong> Any DApp may provide any implementation it wants. Results should be treated as untrusted input.</p>
+</blockquote>
+<p>The ZK proof guarantees the circuit’s logic ran correctly, given whatever inputs witnesses returned. It does not guarantee witnesses returned sensible values.</p>
+<p>Your contract must validate witness outputs:</p>
+<pre><code class="language-compact">// WRONG: trust the witness
+export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
+  const balance = getBalance();  // untrusted!
+  balances[to] += amount;
+}
+
+// RIGHT: validate first
+export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
+  const balance = getBalance();
+  assert(balance &gt;= amount, "Insufficient balance");  // validate!
+  balances[to] += amount;
+}
+</code></pre>
+<hr>
+<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Concept</th><th>Solidity</th><th>TypeScript</th><th>Compact</th></tr>
+</thead>
+<tbody>
+<tr><td>Private input</td><td><code>private</code> variables</td><td>class fields</td><td><code>witness</code></td></tr>
+<tr><td>Secret data</td><td>on-chain (encrypted)</td><td>in memory</td><td>stays local</td></tr>
+<tr><td>Proving computation</td><td>N/A</td><td>N/A</td><td>via circuit</td></tr>
+<tr><td>Trust model</td><td>contract code</td><td>app logic</td><td>witness is untrusted</td></tr>
+</tbody>
+</table>
+</div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>Import <code>CompactStandardLibrary</code> once at the top. It’s built into the compiler.</li>
-<li><code>Maybe&lt;T&gt;</code> is <code>some(v)</code> or <code>none()</code>. Check <code>.isSome</code> before <code>.value</code>.</li>
-<li><code>transient*</code> doesn’t persist. <code>persistent*</code> does.</li>
-<li><code>transientCommit</code> hides witness data without <code>disclose()</code>. <code>transientHash</code> does not.</li>
-<li><code>unshieldedBalanceLt</code> is better than <code>unshieldedBalance</code> for threshold checks.</li>
-<li>Nonces must never be reused. Same nonce + same value = identical commitment.</li>
-<li>EC functions (<code>ecMul</code>, <code>hashToCurve</code>) are for cryptographic operations, not general math.</li>
+<li>Witnesses are callback functions, declared in Compact, implemented in TypeScript.</li>
+<li>They run locally on the user’s device. The value never goes on-chain.</li>
+<li>Only the ZK proof goes on-chain, it proves the circuit ran correctly given the witness inputs.</li>
+<li>The compiler tracks witness data through every operation.</li>
+<li>If witness data reaches the ledger without <code>disclose()</code>, the compiler errors.</li>
+<li><code>transientCommit</code> is an exception, the random nonce provides hiding without <code>disclose()</code>.</li>
+<li><strong>Always validate witness outputs.</strong> The proof proves correct logic, not sensible inputs.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Collection types</li>
-<li><strong>Next:</strong> <a href="./chapter-11.html">Modules and Imports</a>  Code organization</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment patterns</li>
-<li><strong>See also:</strong> <a href="./chapter-16.html">Example Projects</a>  Working examples</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.01.hashing.compact">10.01 Hashing</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.02.tokens.compact">10.02 Tokens</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/10.03.elliptic.compact">10.03 Elliptic Curve</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-05.html">Circuits</a>  Constraint declarations</li>
+<li><strong>Next:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Deep dive on disclose()</li>
+<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Public vs private</li>
+<li><strong>See also:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Full example</li>
+<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></li>
 </ul>
 
                     </main>
@@ -436,6 +405,22 @@ evolveNonce(index, nonce): Bytes&lt;32&gt;
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

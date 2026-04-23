@@ -1,386 +1,336 @@
-# Compact Grammar
+# Ledger ADTs
 
-This note is a readable reference for Compact's syntax, the rules that shape what you write. The formal grammar is EBNF; this note translates it into what you actually type.
+This note covers the collection types available for on-chain state, when to use each and the tradeoffs.
 
-> **Goal after this note:** Read Compact fluently. Know what's legal syntax vs. what's a language rule.
-> **Docs:** [Compact Grammar](https://docs.midnight.network/compact/reference/compact-grammar)
-> **Examples:** [12.01 Patterns](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact) · [12.02 Expressions](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact) · [12.03 Arrow Functions](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact)
+> **Docs:** [Ledger ADT](https://docs.midnight.network/compact/reference/ledger-adt)
+> **Examples:** [09.01 ADTs](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact) · [09.02 Merkle Trees](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact) · [09.03 Kernel](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact)
 
 ---
 
 ## Intuition First
 
-Compact's grammar is deliberately TypeScript-adjacent, but the differences are load-bearing. TypeScript lets you write almost anything, Compact enforces structure at every level:
+Ledger ADTs are the data structures you use for on-chain state. They're not like in-memory data structures in TypeScript, they're persistent, on-chain, and their operations produce verifiable state transitions.
 
-- Every expression has a type known at compile time.
-- Every program element is one of a fixed set of forms.
-- Operators have a fixed precedence order.
-- Some TypeScript patterns (`return` in loops, mixed field separators, two-armed `if` as the "then" of another `if`) are simply not valid.
+Each type optimizes for a specific access pattern:
 
-The grammar isn't a style guide. It's the contract between you and the compiler. If your code follows the grammar, it compiles. If it doesn't, it doesn't.
+- **Counter**, Low-contention atomic counters
+- **Set**, Membership tracking
+- **Map**, Key-value storage
+- **List**, Ordered queue
+- **MerkleTree**, Membership proofs with a single root
+- **HistoricMerkleTree**, Membership proofs across time
 
----
-
-## Program Structure
-
-A Compact program is a flat sequence of program elements. There's no nesting at the top level, modules contain elements, but the program itself is just one element after another:
-
-```
-program → program-element ⋯ program-element
-```
-
-Valid elements (in any order, subject to scope rules):
-
-| Element | Keyword(s) | Purpose |
-|---------|-----------|---------|
-| Pragma | `pragma` | Version constraint |
-| Module | `module` | Namespace block |
-| Import | `import` | Bring in another module |
-| Include | `include` | Inline splice from file |
-| Struct | `struct` | Record type |
-| Enum | `enum` | Sum type |
-| Type alias | `type` / `new type` | Alias |
-| Ledger | `ledger` | On-chain state |
-| Witness | `witness` | Private input |
-| Constructor | `constructor` | Init |
-| Export | `export` | Entry point marker |
-
-Module order rule: a module must be **defined before it is imported**. Circular imports are not allowed.
+The choice matters because the on-chain representation affects what your circuits can prove.
 
 ---
 
-## Pragma
+## Counter
 
-```
-pragma language_version >= 0.22;
-pragma compiler_version >= 0.30.0 && !0.30.1;
-```
+A simple unsigned counter. The key advantage over `Cell<Uint<64>>` is that `Counter` does not read the current value when incrementing, so transactions are less likely to be rejected due to contention.
 
-Version expressions support `||`, `&&`, `!`, `<`, `<=`, `>=`, `>`, and grouping with `()`. Both `major.minor` and `major.minor.patch` forms are valid.
+```compact
+ledger votes: Counter;
 
-Always put the pragma first. It's the first thing the compiler reads.
+export circuit vote(): [] {
+  votes += 1;
+}
 
----
+export circuit retract(): [] {
+  votes -= 1;
+}
 
-## Module
-
-```
-module Math<T> {
-  export circuit add(a: T, b: T): T { return a + b; }
-  circuit helper(x: T): T { return x; }  // private to Math
+export circuit getVotes(): Uint<64> {
+  return votes;
 }
 ```
 
-Generic modules are specialized at import time:
+Operations:
+
+| Operation | Syntax | What it does |
+|----------|--------|-----------|
+| Increment | `field += n` | Add `n`, no read required |
+| Decrement | `field -= n` | Subtract `n`, errors if negative |
+| Read | `field` | Returns as `Uint<64>` |
+| Compare | `field.lessThan(n)` | Returns `Boolean` |
+
+**Why low contention?** A normal `Uint<64>` read-modify-write has three steps: read the value, add one, write back. Under concurrent calls, two transactions might read the same value and both write the same new value. `Counter` combines these steps atomically.
+
+---
+
+## Cell (Plain Types)
+
+When you declare `ledger f: T` without a collection type, it's implicitly a `Cell<T>`. Read and write operations use shorthand.
 
 ```compact
-import Math<Field, 4>;
-```
+ledger owner: Bytes<32>;
 
-`export` makes a binding visible outside the module. Without it, the binding is private.
+export circuit setOwner(addr: Bytes<32>): [] {
+  owner = disclose(addr);  // shorthand for owner.write(...)
+}
 
----
-
-## Import
-
-```
-import Math;                          // all exports
-import { add } from Math;             // specific
-import { add as plus } from Math;    // renamed
-import Math prefix M$;                // prefixed: M$add
-import Math<Field, 4>;               // specialized
-import "utils/Math";                 // from file path
-```
-
-File imports look for `.compact` in the same directory or relative path. Set the search path with `--compact-path` or `COMPACT_PATH`.
-
----
-
-## Ledger Declaration
-
-```
-ledger count: Counter;
-export ledger owner: Bytes<32>;
-export sealed ledger config: Uint<32>;
-```
-
-| Form | Meaning |
-|------|--------|
-| `ledger x: T` | Basic field, non-exported |
-| `export ledger x: T` | Readable from TypeScript |
-| `sealed ledger x: T` | Writeable only in constructor |
-| `export sealed ledger x: T` | Both |
-
----
-
-## Witness Declaration
-
-```
-witness secretKey(): Bytes<32>;
-witness getItem<T>(index: Uint<32>): T;
-```
-
-Witnesses have no body in Compact. The body is provided by the TypeScript DApp. Generics are supported.
-
----
-
-## Constructor
-
-```
-constructor(sk: Bytes<32>, v: Uint<64>) {
-  authority = disclose(publicKey(round, sk));
-  value = disclose(v);
+export circuit getOwner(): Bytes<32> {
+  return owner;  // shorthand for owner.read()
 }
 ```
 
-Runs once on deployment. Parameters come from the deploy transaction. Use `disclose()` for values that should be public from the start.
+`Cell<T>` is the default. Use it for single, mutable values.
 
 ---
 
-## Circuit Definition
+## Set
 
-```
-circuit add(a: Field, b: Field): Field { return a + b; }
-export circuit get(): Uint<64> { return value; }
-export pure circuit hash<T>(v: T): Bytes<32> {
-  return persistentHash<T>(v);
+An unbounded set of unique values. Inserting a duplicate is a no-op.
+
+```compact
+ledger allowlist: Set<Bytes<32>>;
+
+export circuit addAddress(addr: Bytes<32>): [] {
+  allowlist.insert(disclose(addr));
+}
+
+export circuit isAllowed(addr: Bytes<32>): Boolean {
+  return allowlist.member(addr);
 }
 ```
 
-| Modifier | Meaning |
-|----------|--------|
-| `export` | Callable from TypeScript |
-| `pure` | No ledger reads/writes, no witness calls |
+Operations:
 
-Generic circuits must be specialized before export.
+| Operation | Syntax | What it does |
+|----------|--------|-----------|
+| Insert | `set.insert(v)` | Add value, duplicate is no-op |
+| Remove | `set.remove(v)` | Remove value |
+| Check | `set.member(v)` | Returns `Boolean` |
+| Empty check | `set.isEmpty()` | Returns `Boolean` |
+| Size | `set.size()` | Returns `Uint<64>` |
+| Reset | `set.resetToDefault()` | Clears the set |
 
----
-
-## Types
-
-```
-Boolean
-Field
-Uint<8>
-Uint<0..256>
-Bytes<32>
-Opaque<"string">
-Vector<4, Field>
-[Field, Boolean, Uint<16>]
-Maybe<Field>
-Map<Bytes<32>, Uint<64>>
-```
-
-| Form | What it is |
-|------|-----------|
-| `Uint<n>` | Fixed-size unsigned, 0 to 2^n - 1 |
-| `Uint<0..n>` | Bounded unsigned, 0 to n-1 |
-| `Vector<N, T>` | Fixed-length homogeneous sequence |
-| `[T1, T2, ...]` | Fixed-length heterogeneous tuple |
-| `tref` | User-defined or stdlib type |
-
-All types are fixed-size at compile time. No `any`, no `unknown`.
+Useful for allowlists, denylists, and membership tracking.
 
 ---
 
-## Struct and Enum
+## Map
 
-```
-struct Point { x: Field, y: Field }
-struct Pair<T> { first: T; second: T }      // semicolons ok
-enum State { UNSET, SET }
-```
-
-Field separators must be consistent, all commas or all semicolons, not mixed. Trailing separator is allowed.
-
----
-
-## Type Alias
-
-```
-type Hash = Bytes<32>;              // structural, interchangeable
-new type UserId = Bytes<32>;       // nominal, requires explicit cast
-type V3<T> = Vector<3, T>;       // generic
-```
-
-Structural aliases are fully interchangeable with the underlying type. Nominal aliases are distinct types.
-
----
-
-## Blocks and Statements
-
-```
-block → { stmt ⋯ stmt }
-stmt  → if ( expr ) stmt
-      | stmt0
-stmt0 → expr;
-      | const cbinding ,⋯, cbinding;
-      | if ( expr ) stmt0 else stmt
-      | for (const id of nat .. nat) stmt
-      | for (const id of expr) stmt
-      | return expr;
-      | return;
-      | block
-```
-
-**Critical parsing rule:** `stmt` and `stmt0` are split because a one-armed `if` **cannot** be the "then" branch of a two-armed `if`.
+An unbounded key-value mapping. Values can be other ledger-state types (except `Kernel`).
 
 ```compact
-// VALID
-if (a) { x; } else { y; }
-if (b) { z; }
+ledger balances: Map<Bytes<32>, Uint<64>>;
 
-// INVALID, syntax error
-if (a) if (b) { x; } else { y; }
+export circuit setBalance(addr: Bytes<32>, amount: Uint<64>): [] {
+  balances.insert(disclose(addr), disclose(amount));
+}
+
+export circuit getBalance(addr: Bytes<32>): Uint<64> {
+  return balances.lookup(addr);
+}
 ```
 
-The parser sees `if (a) if (b) { x; }` as the "then" of the outer `if`, and `else { y; }` has no matching `if`. Fix by adding braces:
+Operations:
+
+| Operation | Syntax | What it does |
+|----------|--------|-----------|
+| Insert | `map.insert(k, v)` | Add or update key-value |
+| Lookup | `map.lookup(k)` | Returns value (errors if missing) |
+| Check | `map.member(k)` | Returns `Boolean` |
+| Remove | `map.remove(k)` | Delete key-value |
+| Empty check | `map.isEmpty()` | Returns `Boolean` |
+| Size | `map.size()` | Returns `Uint<64>` |
+
+### Nested Maps
 
 ```compact
-if (a) { if (b) { x; } } else { y; }
+ledger fld: Map<Boolean, Map<Field, Counter>>;
+
+export circuit increment(b: Boolean, n: Field, k: Uint<16>): [] {
+  fld.lookup(b).lookup(n) += disclose(k);
+}
 ```
+
+Rules for nesting:
+- Nested values must be initialized before first use.
+- The entire indirection chain must be used in a single expression.
+- Only `Map` values can contain ledger-state types.
+- `Kernel` cannot be nested.
 
 ---
 
-## Patterns
+## List
 
-```
-x                          // simple
-[a, b]                     // tuple destructure
-[a, , c]                   // skip element
-{x, y}                    // struct destructure
-{x: myX, y}                // rename
+An unbounded ordered list. Elements are pushed and popped from the front.
+
+```compact
+ledger queue: List<Field>;
+
+export circuit enqueue(v: Field): [] {
+  queue.pushFront(disclose(v));
+}
+
+export circuit dequeue(): [] {
+  queue.popFront();
+}
+
+export circuit peek(): Field {
+  return queue.head().value;
+}
 ```
 
-Patterns are used in parameter positions and `const` bindings. They let you unpack tuples and structs concisely.
+Operations:
+
+| Operation | Syntax | What it does |
+|----------|--------|-----------|
+| Push | `list.pushFront(v)` | Add to front |
+| Pop | `list.popFront()` | Remove from front |
+| Head | `list.head()` | Returns `Maybe<T>` |
+| Empty check | `list.isEmpty()` | Returns `Boolean` |
+| Length | `list.length()` | Returns `Uint<64>` |
+
+`head()` returns `Maybe<T>`, check `.isSome` before accessing `.value`.
 
 ---
 
-## Expressions: Precedence
+## MerkleTree
 
-Operators at higher levels bind more tightly:
+A bounded Merkle tree of depth `n` (2 ≤ n ≤ 32). Use when you need to prove membership against the **current** root.
 
-| Level | Operators | Notes |
-|-------|-----------|-------|
-| `expr` | `? :`, `=`, `+=`, `-=` | ternary, assignment |
-| `expr0` | `\|\|` | logical or |
-| `expr1` | `&&` | logical and |
-| `expr2` | `==`, `!=` | equality |
-| `expr3` | `<`, `<=`, `>=`, `>` | relational, non-associative |
-| `expr4` | `as` | type cast |
-| `expr5` | `+`, `-` | additive |
-| `expr6` | `*` | multiplicative |
-| `expr7` | `!` | logical not (prefix) |
-| `expr8` | `[i]`, `.field`, `.method()` | indexing, field access |
-| `expr9` | function calls, `map`, `fold`, literals | highest |
+```compact
+ledger members: MerkleTree<8, Bytes<32>>;
 
-**Non-associative relational operators:** `a < b < c` is a syntax error. Write `(a < b) && (b < c)`.
+export circuit addMember(leaf: Bytes<32>): [] {
+  members.insert(disclose(leaf));
+}
+
+export circuit checkMembership(root: MerkleTreeDigest): Boolean {
+  return members.checkRoot(root);
+}
+```
+
+Operations:
+
+| Operation | Syntax | What it does |
+|----------|--------|-----------|
+| Insert | `merkle.insert(v)` | Add leaf, update root |
+| Check | `merkle.checkRoot(digest)` | Verify leaf against current root |
+| Full check | `merkle.isFull()` | Returns `Boolean` |
+| Root | `merkle.root()` | Read-only in TypeScript |
+
+**What this enables:** A compact proof that a value is a member of the set, without revealing the value or the full set. The proof is a Merkle path, a sequence of sibling hashes from the leaf to the root.
+
+**Use case:** Prove you know a secret in a set without revealing the secret.
 
 ---
 
-## Expression Forms
+## HistoricMerkleTree
 
+Like `MerkleTree` but retains past roots. Use when you need to prove membership against **any past root**.
+
+```compact
+ledger commitments: HistoricMerkleTree<16, Bytes<32>>;
+
+export circuit addCommitment(leaf: Bytes<32>): [] {
+  commitments.insert(disclose(leaf));
+}
+
+export circuit verifyOldMembership(root: MerkleTreeDigest): Boolean {
+  return commitments.checkRoot(root);  // accepts any past root
+}
 ```
-map(fn, vec)                      // transform
-fold(fn, init, vec)               // accumulate
-slice<4>(v, start)             // sub-vector
-[x, ...y]                       // spread
-assert(cond, "msg")             // runtime guard
-disclose(expr)                   // explicit disclosure
-pad(32, "prefix")              // padded string literal
-default<T>                      // default value
-```
+
+**What this enables:** Proving that a commitment existed at a past point in time. Useful for nullifier-based systems where you need to prevent double-spending.
 
 ---
 
-## Anonymous Circuits (Arrow Functions)
+## Kernel
 
+A special ledger-state type that provides access to built-in ledger operations.
+
+```compact
+ledger kern: Kernel;
+
+export circuit checkTime(deadline: Uint<64>): Boolean {
+  return kern.blockTimeLessThan(deadline);
+}
+
+export circuit selfAddress(): ContractAddress {
+  return kern.self();
+}
 ```
-map((x) => x + 1, v)
-map((x: Field): Field => x + 1, v)
-map((x) => { return x + 1; }, v)
-map(double, v)                   // named circuit reference
-```
 
-Three forms:
+Operations:
 
-1. **Expression body:** `=> expr`, compact, good for single expressions
-2. **Block body:** `=> block`, for multi-statement logic
-3. **Named reference:** `circuitName`, pass a named circuit
+| Operation | What it does |
+|-----------|-------------|
+| `kern.self()` | Returns this contract's address |
+| `kern.blockTimeLessThan(t)` | Check time against deadline |
+| `kern.balance()` | Check native token balance |
+| `kern.mintShielded(...)` | Mint shielded tokens |
+| `kern.mintUnshielded(...)` | Mint unshielded tokens |
+| `kern.checkpoint()` | Create a checkpoint for upgrades |
 
-Type annotations on arrow parameters are optional.
+`Kernel` cannot be nested in a `Map`.
 
 ---
 
-## `const` Binding
+## Choosing the Right ADT
 
-```
-const x = 42;
-const x: Field = 42;
-const [a, b] = pair;
-const {x, y}: Point = p;
-const a = 1, b = 2;           // multiple in one statement
-```
-
-Variables are immutable after binding. No `let`, no reassignment.
-
----
-
-## What the Grammar Doesn't Tell You
-
-The grammar tells you what's syntactically valid. It doesn't tell you what passes the type checker or the witness protection program. Three layers of validation:
-
-1. **Syntax**, Does it parse? (grammar)
-2. **Types**, Does it type-check? (type system)
-3. **Privacy**, Is disclosure declared? (witness protection)
-
-A program that passes the grammar might still fail at step 2 or 3. The error messages distinguish these.
+| Use case | ADT | Why |
+|---------|-----|-----|
+| Single mutable value | `Cell<T>` | Simple, direct access |
+| Atomic counter (low contention) | `Counter` | Increment without read |
+| Membership tracking | `Set<T>` | O(1) insert, check, remove |
+| Per-key storage | `Map<K, V>` | Key-value with O(1) lookup |
+| Nested per-key storage | `Map<K, Map<K2, V>>` | Two-level lookup |
+| Ordered queue | `List<T>` | Push/pop from front |
+| Current membership proof | `MerkleTree<n, T>` | Single-root membership |
+| Historical membership proof | `HistoricMerkleTree<n, T>` | Multi-root membership |
+| Block time, tokens, address | `Kernel` | Built-in operations |
 
 ---
 
 ## Common Mistakes
 
-1. **Chained relational operators.** `a < b < c` is a syntax error. Relational operators are non-associative, use explicit parentheses.
+1. **Using `Map` when `Set` suffices.** If you only need membership check, use `Set`. `Map` has more overhead for the value storage.
 
-2. **`if` without braces on one side of `else`.** `if (a) if (b) { } else { }` parses as an orphan `else`. Use braces.
+2. **Forgetting that `List` pushes from front.** `pushFront` adds to the front, `popFront` removes from the front. This is a stack, not a queue, the name reflects the storage order, not the access pattern.
 
-3. **Struct separator inconsistency.** `struct S { a: T, b: T; }` mixes separators, not allowed. All commas or all semicolons.
+3. **Not initializing nested values.** Before accessing `map.lookup(k).lookup(k2)`, the inner `Map` for `k` must exist. The compiler requires the entire chain in one expression.
 
-4. **Generic without specialization.** `export circuit id<T>(x: T): T { return x; }` is exported but generic, invalid. Specialize first: `circuit idField = id<Field>;`.
+4. **Using `MerkleTree` when you need historical proofs.** `MerkleTree` only proves against the current root. If you need past roots, use `HistoricMerkleTree`.
 
-5. **Assignment vs equality.** `if (x = 42)` is assignment, not comparison. In Compact this evaluates to `42` (truthy), which is almost certainly not what you want. Use `==`.
+5. **Nesting `Kernel` in `Map`.** Not allowed. `Kernel` is a special type with built-in operations, it cannot be nested.
 
 ---
 
 ## Comparison Layer
 
-| Feature | TypeScript | Rust | Compact |
-|---------|-----------|------|--------|
-| Block body in arrow | `x => { return x; }` | `|x| x` | `=> { }` same |
-| Type cast | `(x as T)` | `x as T` | `x as T` same |
-| Tuple destructuring | `const [a, b] = x` | `let [a, b] = x` | `const [a, b] = x` same |
-| Struct fields | `,` or `;` (flexible) | `,` only | must be consistent |
-| Assignment in condition | allowed | disallowed | `x = y` parses but warns |
-| Rel chaining | `a < b < c` | `a < b && b < c` | syntax error |
-| Generic params | `<T>` | `<T>` | `<T>` or `<#N>` |
+| ADT | Solidity equivalent | Note |
+|-----|---------------------|-----|
+| `Cell<T>` | `uint256` | Simple storage slot |
+| `Counter` | N/A | Atomic increment |
+| `Set<T>` | `mapping → bool` | Unique membership |
+| `Map<K, V>` | `mapping(K ⇒ V)` | Key-value |
+| `List<T>` | `uint256[]` | Ordered with overhead |
+| `MerkleTree` | N/A | ZK-native, not Solidity-native |
+| `Kernel` | built-in | Block time, tokens |
 
 ---
 
 ## Quick Recap
 
-- A program is a flat sequence of elements. A module must be defined before imported.
-- Pragma first, everything else in any order.
-- Struct/enum fields: all commas or all semicolons, not mixed.
-- Relational operators are non-associative: `a < b < c` is a syntax error.
-- One-armed `if` cannot be the "then" of a two-armed `if`, use braces.
-- Generics must be specialized before export.
-- Three validation layers: syntax → types → privacy (disclosure).
+- **Counter**, Low contention, atomic increment without read.
+- **Cell**, Default for single values. Read/write shorthand.
+- **Set**, Membership tracking, unique values.
+- **Map**, Key-value with nested ledger types.
+- **List**, Ordered stack, push/pop from front.
+- **MerkleTree**, Current-root membership proofs.
+- **HistoricMerkleTree**, Any-past-root membership proofs.
+- **Kernel**, Built-in operations (time, tokens, address). Cannot be nested.
+- Choose based on access patterns. The ADT affects what your circuits can prove.
 
 ---
 
 ## Cross-Links
 
 - **Previous:** [Data Types](./chapter-08.md)  Type system
-- **Next:** [Keywords Reference](./chapter-13.md)  Every keyword
-- **See also:** [Standard Library](./chapter-10.md)  Built-in functions
-- **Examples:** [12.01 Patterns](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact) · [12.02 Expressions](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact) · [12.03 Arrow Functions](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact)
+- **Next:** [Standard Library](./chapter-10.md)  Hashing and token functions
+- **See also:** [Ledger State](./chapter-04.md)  Commitment patterns
+- **See also:** [Standard Library](./chapter-10.md)  Merkle tree functions
+- **Examples:** [09.01 ADTs](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact) · [09.02 Merkle Trees](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact) · [09.03 Kernel](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact)

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Security and Best Practices - Compact Book</title>
+        <title>Why Compact - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,286 +174,165 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="security-and-best-practices"><a class="header" href="#security-and-best-practices">Security and Best Practices</a></h1>
-<p>This note covers how to keep data private in Compact contracts, the tools, the patterns, and the mistakes that break privacy.</p>
-<blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/concepts/how-midnight-works/keeping-data-private">Keeping Data Private</a> · <a href="https://docs.midnight.network/compact/reference/writing#basic-confidentiality">Basic Confidentiality</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact">15.01 Hash Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact">15.02 Merkle Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact">15.03 Nullifier</a></p>
-</blockquote>
+                        <h1 id="why-compact"><a class="header" href="#why-compact">Why Compact?</a></h1>
+<p>This note explains why Compact exists, the problem it solves, why traditional approaches fail, and what design choices make it different.</p>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>On Midnight, almost everything is potentially visible:</p>
-<ul>
-<li>Every argument to a ledger operation is public.</li>
-<li>Every read and write of a ledger field is public.</li>
-<li>Even function calls that look internal can leak data through their arguments.</li>
-</ul>
-<p>The exceptions are narrow: <code>MerkleTree</code> insertions don’t reveal the inserted value, and <code>transientCommit</code> with a fresh nonce doesn’t carry witness taint. Everything else is visible.</p>
-<p>This means privacy is not a default, it’s a design discipline. You have to choose the right patterns deliberately.</p>
-<hr>
-<h2 id="whats-publicly-visible"><a class="header" href="#whats-publicly-visible">What’s Publicly Visible</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Operation</th><th>What it reveals</th></tr>
-</thead>
-<tbody>
-<tr><td><code>ledger.insert(v)</code></td><td>The value <code>v</code></td></tr>
-<tr><td><code>ledger.lookup(k)</code></td><td>The key <code>k</code> and the returned value</td></tr>
-<tr><td><code>set.member(f(x))</code></td><td><code>f(x)</code>, not <code>x</code></td></tr>
-<tr><td><code>merkleTree.insert(v)</code></td><td>Does NOT reveal <code>v</code></td></tr>
-<tr><td>Circuit arguments</td><td>All of them</td></tr>
-<tr><td><code>witness</code> return values</td><td>Nothing (stays local)</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>The rule:</strong> If it goes through the ledger or circuit arguments, assume it’s public. The burden of proof is on privacy.</p>
-<hr>
-<h2 id="pattern-1-hashes-and-commitments"><a class="header" href="#pattern-1-hashes-and-commitments">Pattern 1: Hashes and Commitments</a></h2>
-<p>Store a hash or commitment instead of the value itself.</p>
-<h3 id="when-to-use-each"><a class="header" href="#when-to-use-each">When to Use Each</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Tool</th><th>When to use it</th></tr>
-</thead>
-<tbody>
-<tr><td><code>persistentHash&lt;T&gt;(v)</code></td><td>Identity and keys stored on-chain. Value space is large enough that brute-force is infeasible.</td></tr>
-<tr><td><code>persistentCommit&lt;T&gt;(v, rand)</code></td><td>Sensitive values where the same value might appear multiple times (prevents correlation) or the value space is small (prevents guessing).</td></tr>
-</tbody>
-</table>
-</div>
-<h3 id="why-commitment-over-hash"><a class="header" href="#why-commitment-over-hash">Why Commitment Over Hash</a></h3>
-<p>A bare hash of a small value space, like a vote for one of two candidates, can be brute-forced in seconds. The nonce in <code>persistentCommit</code> makes it infeasible even for small values.</p>
-<pre><code class="language-compact">// Bad, brute-forcible
-commitment = persistentHash&lt;Uint&lt;1&gt;&gt;(vote);
-
-// Good, nonce prevents brute force
-nonce = freshNonce();
-commitment = persistentCommit&lt;Uint&lt;1&gt;&gt;(vote, nonce);
-</code></pre>
-<h3 id="nonce-reuse-is-a-privacy-catastrophe"><a class="header" href="#nonce-reuse-is-a-privacy-catastrophe">Nonce Reuse Is a Privacy Catastrophe</a></h3>
-<p>Two commitments with the same nonce and value are identical on-chain. If anyone knows the value, they can identify every transaction that used the same nonce.</p>
-<p><strong>Rule:</strong> Every commitment needs a fresh nonce. One safe approach: derive the nonce from a secret key and a round counter.</p>
-<pre><code class="language-compact">circuit deriveNonce(sk: Bytes&lt;32&gt;, round: Field): Field {
-  return transientHash&lt;Vector&lt;2, Bytes&lt;32&gt;&gt;&gt;(
-    [pad(32, "nonce:"), sk]
-  );
-}
-</code></pre>
-<hr>
-<h2 id="pattern-2-hash-based-authentication"><a class="header" href="#pattern-2-hash-based-authentication">Pattern 2: Hash-Based Authentication</a></h2>
-<p>ZK proofs can emulate signatures using only hashes. Store a hash of the secret key as the “public key”, circuits prove knowledge of the preimage without revealing it.</p>
-<pre><code class="language-compact">witness secretKey(): Bytes&lt;32&gt;;
-export ledger organizer: Bytes&lt;32&gt;;
-export ledger restrictedCounter: Counter;
-
-constructor() {
-  organizer = disclose(publicKey(secretKey()));
-}
-
-export circuit increment(): [] {
-  assert(organizer == publicKey(secretKey()), "not authorized");
-  restrictedCounter.increment(1);
-}
-
-pure circuit publicKey(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
-  return persistentHash&lt;Vector&lt;2, Bytes&lt;32&gt;&gt;&gt;(
-    [pad(32, "some-domain-separator"), sk]
-  );
-}
-</code></pre>
-<p>This pattern:</p>
-<ul>
-<li>Proves the caller knows the secret key.</li>
-<li>Doesn’t reveal the secret key.</li>
-<li>Doesn’t require a full signature scheme.</li>
-</ul>
-<p><strong>Domain separator matters.</strong> The same secret key can produce different public keys for different purposes. Never reuse a public key across different domains.</p>
-<hr>
-<h2 id="pattern-3-merkle-trees-for-anonymous-membership"><a class="header" href="#pattern-3-merkle-trees-for-anonymous-membership">Pattern 3: Merkle Trees for Anonymous Membership</a></h2>
-<p>A <code>MerkleTree</code> proves that a value exists in a set <strong>without revealing which value</strong>. This is the key difference from <code>Set</code>:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Structure</th><th>What it proves</th><th>What it reveals</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Set&lt;Bytes&lt;32&gt;&gt;</code></td><td>Membership of a specific commitment</td><td>Which commitment was checked</td></tr>
-<tr><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Membership of a value</td><td>Only that <em>some</em> value was proven</td></tr>
-</tbody>
-</table>
-</div>
-<pre><code class="language-compact">import CompactStandardLibrary;
-
-export ledger items: MerkleTree&lt;10, Field&gt;;
-witness findItem(item: Field): MerkleTreePath&lt;10, Field&gt;;
-
-export circuit insert(item: Field): [] {
-  items.insert(disclose(item));
-}
-
-export circuit check(item: Field): [] {
-  const path = findItem(item);
-  assert(
-    items.checkRoot(merkleTreePathRoot&lt;10, Field&gt;(path)),
-    "path must be valid"
-  );
-}
-</code></pre>
-<p>The TypeScript side provides the path:</p>
-<pre><code class="language-typescript">function findItem(context: WitnessContext, item: bigint): MerkleTreePath&lt;bigint&gt; {
-  return context.ledger.items.findPathForLeaf(item)!;
-}
-</code></pre>
-<p><strong>Depth choice:</strong> Each level adds 1 to the circuit depth. Use the minimum depth that fits your use case. 16–20 is typical.</p>
-<h3 id="when-to-use-historicmerkletree"><a class="header" href="#when-to-use-historicmerkletree">When to Use HistoricMerkleTree</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Tree type</th><th>When to use</th></tr>
-</thead>
-<tbody>
-<tr><td><code>MerkleTree</code></td><td>Only current root matters. Proofs must verify against today’s root.</td></tr>
-<tr><td><code>HistoricMerkleTree</code></td><td>Proofs must verify against past roots. Used in nullifier patterns.</td></tr>
-</tbody>
-</table>
-</div>
-<p>Avoid <code>HistoricMerkleTree</code> when items are frequently removed, stale proofs could be accepted after the tree has changed.</p>
-<h3 id="path-performance"><a class="header" href="#path-performance">Path Performance</a></h3>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Method</th><th>Complexity</th><th>Requires</th></tr>
-</thead>
-<tbody>
-<tr><td><code>pathForLeaf</code></td><td>O(1)</td><td>Knowing the leaf index</td></tr>
-<tr><td><code>findPathForLeaf</code></td><td>O(n) scan</td><td>Scanning the tree</td></tr>
-</tbody>
-</table>
-</div>
-<p>Use <code>pathForLeaf</code> when you know the index. Use <code>findPathForLeaf</code> only when you don’t.</p>
-<hr>
-<h2 id="pattern-4-commitmentnullifier"><a class="header" href="#pattern-4-commitmentnullifier">Pattern 4: Commitment/Nullifier</a></h2>
-<p>This pattern enables single-use anonymous authentication tokens, the core of Zcash and Zswap. It has four steps:</p>
-<pre><code>1. Insert a COMMITMENT (hash of secret data) into a MerkleTree
-        ↓
-2. To use the token: prove membership in the tree
-        ↓
-3. Add the NULLIFIER (different hash of the same secret) to a Set
-        ↓
-4. Assert the nullifier is NOT in the Set → prevents reuse
-        ↓
-The Set reveals SOME token was used, but NOT which one
-</code></pre>
-<p>The key insight: the <code>Set</code> of nullifiers is public and reveals only that <em>a</em> token was spent, not <em>which</em> one. The commitment’s anonymity comes from the Merkle tree.</p>
-<p><strong>Critical: commitment and nullifier must use different domain separators.</strong> If they share a domain, they could be equal for some inputs, leaking the secret.</p>
-<pre><code class="language-compact">witness findAuthPath(pk: Bytes&lt;32&gt;): MerkleTreePath&lt;10, Bytes&lt;32&gt;&gt;;
-witness secretKey(): Bytes&lt;32&gt;;
-
-export ledger authorizedCommitments: HistoricMerkleTree&lt;10, Bytes&lt;32&gt;&gt;;
-export ledger authorizedNullifiers: Set&lt;Bytes&lt;32&gt;&gt;;
-export ledger restrictedCounter: Counter;
-
-export circuit addAuthority(pk: Bytes&lt;32&gt;): [] {
-  authorizedCommitments.insert(disclose(pk));
-}
-
-export circuit increment(): [] {
-  const sk = secretKey();
-  const authPath = findAuthPath(publicKey(sk));
-  assert(
-    authorizedCommitments.checkRoot(merkleTreePathRoot&lt;10, Bytes&lt;32&gt;&gt;(authPath)),
-    "not authorized"
-  );
-  const nul = nullifier(sk);
-  assert(!authorizedNullifiers.member(nul), "already incremented");
-  authorizedNullifiers.insert(disclose(nul));
-  restrictedCounter.increment(1);
-}
-
-pure circuit publicKey(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
-  return persistentHash&lt;Vector&lt;2, Bytes&lt;32&gt;&gt;&gt;(
-    [pad(32, "commitment-domain"), sk]
-  );
-}
-
-pure circuit nullifier(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
-  return persistentHash&lt;Vector&lt;2, Bytes&lt;32&gt;&gt;&gt;(
-    [pad(32, "nullifier-domain"), sk]
-  );
-}
-</code></pre>
-<h3 id="walkthrough"><a class="header" href="#walkthrough">Walkthrough</a></h3>
+<p>Before Compact, writing privacy-preserving smart contracts required either:</p>
 <ol>
-<li><strong>Setup:</strong> An authority inserts their public key into the tree.</li>
-<li><strong>Authenticate:</strong> The user proves membership via the Merkle path.</li>
-<li><strong>Spend:</strong> The nullifier is added to the <code>Set</code>. Next time, the <code>Set.member</code> check fails, reuse is prevented.</li>
-<li><strong>Anonymity:</strong> The <code>Set</code> of nullifiers is public. Someone spent a token. No one knows which one.</li>
+<li><strong>Writing raw ZK circuits</strong>, Cryptographically correct but inaccessible to most developers.</li>
+<li><strong>Using traditional smart contracts</strong>, Accessible but with no privacy at all.</li>
 </ol>
+<p>Compact sits between these extremes. It makes privacy-preserving computation accessible to TypeScript developers by handling the circuit generation automatically. You write code that looks familiar; the compiler produces the cryptographic machinery.</p>
+<p>The tradeoff is bounded computation. Compact intentionally cannot express Turing-complete programs. In exchange, every valid program compiles to a circuit.</p>
 <hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
-<ol>
-<li>
-<p><strong>Using <code>persistentHash</code> for small value spaces.</strong> A hash of a vote can be brute-forced. Always use <code>persistentCommit</code> with a fresh nonce for sensitive or small values.</p>
-</li>
-<li>
-<p><strong>Reusing nonces.</strong> Every commitment with the same nonce and value is identical on-chain. Derive nonces from a secret or counter.</p>
-</li>
-<li>
-<p><strong>Using <code>Set</code> when you need anonymity.</strong> <code>set.member(commitment)</code> reveals which commitment was checked. Use <code>MerkleTree</code> + <code>merkleTreePathRoot</code> when anonymity matters.</p>
-</li>
-<li>
-<p><strong>Same domain for commitment and nullifier.</strong> If they share a domain, they could collide for some inputs. Always use different domain separators.</p>
-</li>
-<li>
-<p><strong><code>transientHash</code> instead of <code>transientCommit</code>.</strong> <code>transientHash</code> carries witness taint, it requires <code>disclose()</code> to store. <code>transientCommit</code> doesn’t.</p>
-</li>
-<li>
-<p><strong>Forgetting <code>disclose()</code> on Merkle tree inserts.</strong> Even though <code>MerkleTree</code> doesn’t reveal the value, the insert itself is a ledger operation. The value must be disclosed before insertion.</p>
-</li>
-<li>
-<p><strong>Using <code>HistoricMerkleTree</code> unnecessarily.</strong> It retains past roots, which costs storage and complexity. Use <code>MerkleTree</code> unless you need historical proofs.</p>
-</li>
-</ol>
-<hr>
-<h2 id="privacy-tool-selection"><a class="header" href="#privacy-tool-selection">Privacy Tool Selection</a></h2>
+<h2 id="the-three-approaches"><a class="header" href="#the-three-approaches">The Three Approaches</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Goal</th><th>Tool</th></tr>
+<tr><th>Approach</th><th>Privacy</th><th>Accessibility</th><th>Complexity</th></tr>
 </thead>
 <tbody>
-<tr><td>Hide a value on-chain</td><td><code>persistentCommit</code> + fresh nonce</td></tr>
-<tr><td>Prevent correlation of equal values</td><td><code>persistentCommit</code> + fresh nonce</td></tr>
-<tr><td>Authenticate without a full signature</td><td><code>persistentHash</code> as public key</td></tr>
-<tr><td>Prove set membership anonymously</td><td><code>MerkleTree</code> + <code>merkleTreePathRoot</code></td></tr>
-<tr><td>Prove membership against past state</td><td><code>HistoricMerkleTree</code></td></tr>
-<tr><td>Single-use anonymous token</td><td>Commitment/nullifier pattern</td></tr>
-<tr><td>Temporary computation (no ledger)</td><td><code>transientCommit</code> (no <code>disclose()</code> needed)</td></tr>
+<tr><td>Raw ZK circuits</td><td>Full</td><td>Requires cryptographic expertise</td><td>Extremely high</td></tr>
+<tr><td>Traditional smart contracts (Solidity)</td><td>None</td><td>Accessible to developers</td><td>Low</td></tr>
+<tr><td><strong>Compact</strong></td><td><strong>Full</strong></td><td><strong>TypeScript-like syntax</strong></td><td><strong>Medium</strong></td></tr>
+</tbody>
+</table>
+</div>
+<p>Compact doesn’t add privacy to existing contracts. It builds privacy into the model from the start, at the language level.</p>
+<hr>
+<h2 id="the-privacy-model"><a class="header" href="#the-privacy-model">The Privacy Model</a></h2>
+<p>Traditional smart contracts have one world: public state that everyone can see. Midnight has two.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>World</th><th>Location</th><th>Visibility</th><th>Contents</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Public</strong></td><td>On-chain</td><td>Everyone</td><td>Proofs, contract code, public data</td></tr>
+<tr><td><strong>Private</strong></td><td>Local storage</td><td>Only the owner</td><td>Sensitive data, secrets</td></tr>
+</tbody>
+</table>
+</div>
+<p>Computations happen locally on private data. A ZK proof of correctness is submitted on-chain. Validators verify the proof without seeing the inputs.</p>
+<p><strong>The key insight:</strong> Privacy doesn’t mean “hiding everything.” It means proving you have the right to do something without revealing what that something is. A ZK proof says: “I ran this computation correctly” without revealing the inputs to that computation.</p>
+<hr>
+<h2 id="why-not-just-use-traditional-contracts"><a class="header" href="#why-not-just-use-traditional-contracts">Why Not Just Use Traditional Contracts?</a></h2>
+<p>Traditional contracts make everything public by default. This is fine for many use cases, but breaks down when:</p>
+<ul>
+<li><strong>Regulated data</strong>, Healthcare (HIPAA), finance (SOX), identity (KYC). Public exposure isn’t optional.</li>
+<li><strong>Competitive data</strong>, Bid amounts, inventory levels, proprietary information.</li>
+<li><strong>Personal data</strong>, Balances, transaction history, credit scores.</li>
+</ul>
+<p>You could encrypt data on-chain, but then no one can verify computation on it. Traditional ZK approach is to write circuits from scratch, extremely difficult to get right and audit.</p>
+<p>Compact makes the ZK approach accessible.</p>
+<hr>
+<h2 id="type-safety-at-the-language-level"><a class="header" href="#type-safety-at-the-language-level">Type Safety at the Language Level</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Language</th><th>Type Safety</th><th>What it means</th></tr>
+</thead>
+<tbody>
+<tr><td>JavaScript</td><td>None</td><td>Any value, any type, runtime errors</td></tr>
+<tr><td>Solidity</td><td>Loosely typed</td><td>Implicit conversions, overflow allowed</td></tr>
+<tr><td>TypeScript</td><td>Optional</td><td>Opt-in with <code>tsconfig</code>, can be bypassed</td></tr>
+<tr><td><strong>Compact</strong></td><td><strong>Strong, enforced</strong></td><td><strong>Compiler rejects any program that doesn’t type-check</strong></td></tr>
+</tbody>
+</table>
+</div>
+<p>Strong type safety matters in Compact because the type system tracks data flow for privacy enforcement. If types were loose, the compiler couldn’t track where private data travels.</p>
+<hr>
+<h2 id="verifiability-vs-privacy"><a class="header" href="#verifiability-vs-privacy">Verifiability vs. Privacy</a></h2>
+<p>| You want | Traditional contracts | Raw ZK circuits | Compact |
+|———|—————––|—————–|—————|––––|
+| Everything verifiable | Yes | Yes | Yes |
+| Full privacy | <strong>No</strong> | Yes | Yes |
+| Accessible syntax | Yes | <strong>No</strong> | Yes |</p>
+<p>Compact gives you both verifiability and privacy without requiring cryptographic expertise. You don’t write a single circuit by hand.</p>
+<hr>
+<h2 id="selective-disclosure"><a class="header" href="#selective-disclosure">Selective Disclosure</a></h2>
+<p>Compact supports selective disclosure, users choose exactly what to reveal and to whom. This enables regulated use cases:</p>
+<ul>
+<li><strong>Healthcare:</strong> Prove you meet age requirements without revealing your birthday.</li>
+<li><strong>Finance:</strong> Prove your balance exceeds a threshold without revealing the balance.</li>
+<li><strong>Identity:</strong> Prove citizenship without revealing your nationality or full address.</li>
+</ul>
+<p>This isn’t a feature bolted on. It’s baked into the model via <code>disclose()</code>, a compile-time boundary that marks intentional disclosure.</p>
+<hr>
+<h2 id="when-to-choose-compact"><a class="header" href="#when-to-choose-compact">When to Choose Compact</a></h2>
+<p>Use Compact when you need:</p>
+<ul>
+<li>Privacy-preserving logic on a public blockchain</li>
+<li>To prove correctness without revealing inputs</li>
+<li>TypeScript-like development without learning ZK circuit design</li>
+<li>Selective disclosure for regulated data</li>
+</ul>
+<hr>
+<h2 id="when-not-to-choose-compact"><a class="header" href="#when-not-to-choose-compact">When Not to Choose Compact</a></h2>
+<p>Compact is not the right tool when:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Scenario</th><th>Why not Compact</th><th>Alternative</th></tr>
+</thead>
+<tbody>
+<tr><td>No privacy requirements</td><td>Traditional contracts are simpler</td><td>Solidity</td></tr>
+<tr><td>Turing-complete computation needed</td><td>Compact is intentionally bounded</td><td>Raw circuits</td></tr>
+<tr><td>Dynamically-sized data structures</td><td>All sizes must be compile-time constants</td><td>Design around bounded structures</td></tr>
+<tr><td>Complex cryptography needed</td><td>Compact generates standard circuits</td><td>Write custom circuits</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="the-core-tradeoff"><a class="header" href="#the-core-tradeoff">The Core Tradeoff</a></h2>
+<p>Compact trades:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>What you give up</th><th>What you get</th></tr>
+</thead>
+<tbody>
+<tr><td>Turing-completeness</td><td>Automatic ZK circuit compilation</td></tr>
+<tr><td>Dynamic typing</td><td>Strong type safety enforced at compile time</td></tr>
+<tr><td>Implicit privacy</td><td>Privacy model that works at the language level</td></tr>
+</tbody>
+</table>
+</div>
+<p>This tradeoff is explicit and intentional. If you need full Turing-completeness, you don’t need Compact. But if you need privacy-preserving smart contracts and don’t want to write circuits by hand, Compact is purpose-built for exactly this.</p>
+<hr>
+<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Feature</th><th>Solidity</th><th>Raw ZK (Circom)</th><th>Compact</th></tr>
+</thead>
+<tbody>
+<tr><td>Language</td><td>Solidity</td><td>Circom/DSL</td><td>TypeScript-like</td></tr>
+<tr><td>Privacy model</td><td>None</td><td>Full</td><td>Full</td></tr>
+<tr><td>Type safety</td><td>Loose</td><td>Manual</td><td>Enforced</td></tr>
+<tr><td>Learning curve</td><td>Low</td><td>Very high</td><td>Medium</td></tr>
+<tr><td>Compilation</td><td>EVM bytecode</td><td>Circuit</td><td>ZK circuits + TS</td></tr>
+<tr><td>State model</td><td>On-chain only</td><td>Custom</td><td>Public + private</td></tr>
 </tbody>
 </table>
 </div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>Almost everything on-chain is public. Assume ledger operations and circuit arguments are visible.</li>
-<li>Use <code>persistentCommit</code> over <code>persistentHash</code> for sensitive or small values.</li>
-<li>Never reuse a nonce. Derive it from a secret or counter.</li>
-<li><code>MerkleTree</code> provides anonymity. <code>Set</code> does not.</li>
-<li>Commitment/nullifier requires different domain separators.</li>
-<li><code>transientCommit</code> with a fresh nonce doesn’t carry witness taint, no <code>disclose()</code> needed.</li>
-<li>Use <code>findPathForLeaf</code> (O(n)) only when you don’t know the index. Use <code>pathForLeaf</code> (O(1)) when you do.</li>
+<li>Compact bridges the gap between inaccessible raw ZK and privacy-free traditional contracts.</li>
+<li>Midnight has two worlds: public (on-chain) and private (local). Only the proof goes on-chain.</li>
+<li>Selective disclosure lets users reveal exactly what they choose, to whom they choose.</li>
+<li>Compact trades Turing-completeness for automatic ZK circuit generation and strong type safety.</li>
+<li>If you don’t need privacy, traditional contracts are simpler. If you need full control, raw circuits exist.</li>
+<li>The type system is strict by design, it tracks data flow for privacy enforcement.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-14.html">Testing and Debugging</a>  Version management</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Commitment patterns</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Disclosure boundary</li>
-<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Hash functions</li>
-<li><strong>See also:</strong> <a href="./chapter-16.html">Example Projects</a>  Working contracts</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact">15.01 Hash Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact">15.02 Merkle Auth</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact">15.03 Nullifier</a></li>
+<li><strong>Next:</strong> <a href="./chapter-02.html">Setting Up the Compiler</a>, Install the toolchain</li>
+<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>, How the two-world model works</li>
+<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>, How selective disclosure works</li>
 </ul>
 
                     </main>
@@ -491,6 +370,22 @@ pure circuit nullifier(sk: Bytes&lt;32&gt;): Bytes&lt;32&gt; {
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

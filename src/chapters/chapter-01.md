@@ -1,164 +1,252 @@
-# Why Compact?
+# Modules and Imports
 
-This note explains why Compact exists, the problem it solves, why traditional approaches fail, and what design choices make it different.
+This note covers organizing code across files using Compact's static module system.
+
+> **Docs:** [Modules, Exports, and Imports](https://docs.midnight.network/compact/reference/compact-reference#modules-exports-and-imports)
+> **Examples:** [11.01 Module Definition](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.01.module.compact) · [11.02 Imports](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.02.imports.compact) · [11.03 Exports](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.03.exports.compact)
 
 ---
 
 ## Intuition First
 
-Before Compact, writing privacy-preserving smart contracts required either:
+Compact uses a static module system, modules are defined before use, and file resolution is determined at compile time. There are no runtime imports or dynamic module loading.
 
-1. **Writing raw ZK circuits**, Cryptographically correct but inaccessible to most developers.
-2. **Using traditional smart contracts**, Accessible but with no privacy at all.
+This is simpler than it sounds. If you're coming from TypeScript or Rust, you already know the pattern:
 
-Compact sits between these extremes. It makes privacy-preserving computation accessible to TypeScript developers by handling the circuit generation automatically. You write code that looks familiar; the compiler produces the cryptographic machinery.
-
-The tradeoff is bounded computation. Compact intentionally cannot express Turing-complete programs. In exchange, every valid program compiles to a circuit.
-
----
-
-## The Three Approaches
-
-| Approach | Privacy | Accessibility | Complexity |
-|----------|---------|--------------|-----------|
-| Raw ZK circuits | Full | Requires cryptographic expertise | Extremely high |
-| Traditional smart contracts (Solidity) | None | Accessible to developers | Low |
-| **Compact** | **Full** | **TypeScript-like syntax** | **Medium** |
-
-Compact doesn't add privacy to existing contracts. It builds privacy into the model from the start, at the language level.
+1. Define a module.
+2. Export what you want to expose.
+3. Import it where you need it.
+4. The compiler resolves files at compile time.
 
 ---
 
-## The Privacy Model
+## Defining a Module
 
-Traditional smart contracts have one world: public state that everyone can see. Midnight has two.
+```compact
+module Math {
+  export circuit add(a: Field, b: Field): Field {
+    return a + b;
+  }
 
-| World | Location | Visibility | Contents |
-|-------|----------|-----------|---------|
-| **Public** | On-chain | Everyone | Proofs, contract code, public data |
-| **Private** | Local storage | Only the owner | Sensitive data, secrets |
+  export circuit mul(a: Field, b: Field): Field {
+    return a * b;
+  }
 
-Computations happen locally on private data. A ZK proof of correctness is submitted on-chain. Validators verify the proof without seeing the inputs.
+  circuit helper(x: Field): Field {  // not exported
+    return x + 1;
+  }
+}
+```
 
-**The key insight:** Privacy doesn't mean "hiding everything." It means proving you have the right to do something without revealing what that something is. A ZK proof says: "I ran this computation correctly" without revealing the inputs to that computation.
-
----
-
-## Why Not Just Use Traditional Contracts?
-
-Traditional contracts make everything public by default. This is fine for many use cases, but breaks down when:
-
-- **Regulated data**, Healthcare (HIPAA), finance (SOX), identity (KYC). Public exposure isn't optional.
-- **Competitive data**, Bid amounts, inventory levels, proprietary information.
-- **Personal data**, Balances, transaction history, credit scores.
-
-You could encrypt data on-chain, but then no one can verify computation on it. Traditional ZK approach is to write circuits from scratch, extremely difficult to get right and audit.
-
-Compact makes the ZK approach accessible.
+Bindings inside a module are invisible outside unless explicitly exported. `helper` is private to `Math`.
 
 ---
 
-## Type Safety at the Language Level
+## Exporting from a Module
 
-| Language | Type Safety | What it means |
-|----------|------------|-------------|
-| JavaScript | None | Any value, any type, runtime errors |
-| Solidity | Loosely typed | Implicit conversions, overflow allowed |
-| TypeScript | Optional | Opt-in with `tsconfig`, can be bypassed |
-| **Compact** | **Strong, enforced** | **Compiler rejects any program that doesn't type-check** |
+Two ways to export:
 
-Strong type safety matters in Compact because the type system tracks data flow for privacy enforcement. If types were loose, the compiler couldn't track where private data travels.
+```compact
+// Inline export
+module M {
+  export struct Point { x: Field, y: Field }
+  export circuit distance(p: Point): Field { ... }
+}
 
----
+// Separate export
+module M {
+  struct Point { x: Field, y: Field }
+  circuit distance(p: Point): Field { ... }
+  export { Point, distance };
+}
+```
 
-## Verifiability vs. Privacy
-
-| You want | Traditional contracts | Raw ZK circuits | Compact |
-|---------|-------------------|-----------------|---------------|--------|
-| Everything verifiable | Yes | Yes | Yes |
-| Full privacy | **No** | Yes | Yes |
-| Accessible syntax | Yes | **No** | Yes |
-
-Compact gives you both verifiability and privacy without requiring cryptographic expertise. You don't write a single circuit by hand.
+Both are equivalent. Inline export is more compact for small modules. Separate export is useful for controlling the public API.
 
 ---
 
-## Selective Disclosure
+## Importing
 
-Compact supports selective disclosure, users choose exactly what to reveal and to whom. This enables regulated use cases:
+```compact
+import Math;                    // everything exported by Math
+import { add } from Math;       // specific binding
+import Math prefix Math$;        // with prefix (Math$add)
+import { add as plus } from Math; // renamed
+```
 
-- **Healthcare:** Prove you meet age requirements without revealing your birthday.
-- **Finance:** Prove your balance exceeds a threshold without revealing the balance.
-- **Identity:** Prove citizenship without revealing your nationality or full address.
-
-This isn't a feature bolted on. It's baked into the model via `disclose()`, a compile-time boundary that marks intentional disclosure.
-
----
-
-## When to Choose Compact
-
-Use Compact when you need:
-
-- Privacy-preserving logic on a public blockchain
-- To prove correctness without revealing inputs
-- TypeScript-like development without learning ZK circuit design
-- Selective disclosure for regulated data
+Prefix notation (`Math$add`) is useful when you have name conflicts across modules.
 
 ---
 
-## When Not to Choose Compact
+## Generic Modules
 
-Compact is not the right tool when:
+```compact
+module Container<T, #N> {
+  export circuit first(v: Vector<N, T>): T { return v[0]; }
+  export circuit last(v: Vector<N, T>): T { return v[N - 1]; }
+}
 
-| Scenario | Why not Compact | Alternative |
-|---------|---------------|-------------|
-| No privacy requirements | Traditional contracts are simpler | Solidity |
-| Turing-complete computation needed | Compact is intentionally bounded | Raw circuits |
-| Dynamically-sized data structures | All sizes must be compile-time constants | Design around bounded structures |
-| Complex cryptography needed | Compact generates standard circuits | Write custom circuits |
+import Container<Field, 4>;
+```
+
+Generic modules must be specialized at import time. `Container<Field, 4>` is a concrete module.
 
 ---
 
-## The Core Tradeoff
+## Importing from Files
 
-Compact trades:
+```compact
+import MyModule;
+// looks for MyModule.compact in the same directory
 
-| What you give up | What you get |
-|----------------|-------------|
-| Turing-completeness | Automatic ZK circuit compilation |
-| Dynamic typing | Strong type safety enforced at compile time |
-| Implicit privacy | Privacy model that works at the language level |
+import "utils/Math";
+// looks for utils/Math.compact relative to the importing file
+```
 
-This tradeoff is explicit and intentional. If you need full Turing-completeness, you don't need Compact. But if you need privacy-preserving smart contracts and don't want to write circuits by hand, Compact is purpose-built for exactly this.
+Rules:
+- File must contain exactly one module definition.
+- If not found, it's a compile error.
+- Search path is set via `--compact-path` or `COMPACT_PATH`.
+
+---
+
+## Include Files
+
+`include` splices contents directly into the current file:
+
+```compact
+include "shared/types.compact";
+```
+
+Unlike `import`, `include` is text substitution, the included contents become part of the file. Use for sharing type definitions, enums, and constants.
+
+---
+
+## Top-Level Exports
+
+```compact
+export circuit transfer(to: Bytes<32>, amount: Uint<64>): [] { ... }
+export struct TokenInfo { name: Bytes<32>, supply: Uint<64> }
+export ledger totalSupply: Uint<64>;
+```
+
+Top-level exports are the contract's public API. They're callable from TypeScript.
+
+Rules:
+- No two exported circuits can share the same name.
+- Generic circuits cannot be exported, they must be specialized first.
+
+---
+
+## Module Order
+
+**Important:** A module must be **defined before** any import of that module.
+
+```compact
+// INCORRECT
+import State;  // error: State not yet defined
+module State { ... }
+
+// CORRECT
+module State { ... }
+import State;
+```
+
+This is a compile-time requirement, not a style choice. Circular dependencies are not allowed.
+
+---
+
+## Practical Example
+
+**`state.compact`**
+
+```compact
+module State {
+  enum STATUS { UNSET, SET }
+  ledger status: STATUS;
+  ledger value: Field;
+
+  export circuit init(v: Field): [] {
+    value = disclose(v);
+    status = STATUS.SET;
+  }
+
+  export circuit get(): Field {
+    assert(status == STATUS.SET, "Not initialized");
+    return value;
+  }
+}
+```
+
+**`main.compact`**
+
+```compact
+pragma language_version 0.22;
+import CompactStandardLibrary;
+import State;
+
+constructor(v: Field) {
+  init(v);
+}
+
+export circuit getValue(): Field {
+  return State.get();
+}
+```
+
+`main.compact` defines no state itself, it just imports and re-exports `State`. This separation of concerns keeps contracts organized.
+
+---
+
+## Common Mistakes
+
+1. **Importing before defining.** The compiler requires module definitions to come before imports. Move the `module` block above the `import` statement.
+
+2. **Assuming `include` works like `import`.** `include` is text substitution. `import` is a reference. Use `include` for types, `import` for modules.
+
+3. **Exporting generic circuits directly.** Generic circuits must be specialized before export. Move specialization to a non-exported circuit.
+
+4. **Forgetting the search path.** If `import "utils/Math"` fails, the compiler can't find the file. Set `COMPACT_PATH` or use `--compact-path`.
+
+5. **Name conflicts across modules.** Use `prefix` notation (`Math$add`) or explicit renaming (`import { add as plus } from Math`) to avoid conflicts.
 
 ---
 
 ## Comparison Layer
 
-| Feature | Solidity | Raw ZK (Circom) | Compact |
-|---------|---------|-----------------|---------|
-| Language | Solidity | Circom/DSL | TypeScript-like |
-| Privacy model | None | Full | Full |
-| Type safety | Loose | Manual | Enforced |
-| Learning curve | Low | Very high | Medium |
-| Compilation | EVM bytecode | Circuit | ZK circuits + TS |
-| State model | On-chain only | Custom | Public + private |
+| Concept | TypeScript | Rust | Compact |
+|---------|-----------|------|--------|
+| Namespace | module, import | mod, use | module, import |
+| Visibility | `export` | `pub` | `export` |
+| Private | default | default | default |
+| Circular deps | runtime error | compile error | compile error |
+| Generic modules | `module<T>` | `mod<T>` | `module<T, #N>` |
+| Text inclusion | N/A | N/A | `include` |
 
 ---
 
-## Quick Recap
+## Quick Reference
 
-- Compact bridges the gap between inaccessible raw ZK and privacy-free traditional contracts.
-- Midnight has two worlds: public (on-chain) and private (local). Only the proof goes on-chain.
-- Selective disclosure lets users reveal exactly what they choose, to whom they choose.
-- Compact trades Turing-completeness for automatic ZK circuit generation and strong type safety.
-- If you don't need privacy, traditional contracts are simpler. If you need full control, raw circuits exist.
-- The type system is strict by design, it tracks data flow for privacy enforcement.
+| Syntax | Effect |
+|--------|--------|
+| `module M { ... }` | Define module `M` |
+| `export circuit f(...)` | Export from module or top-level |
+| `export { f, g }` | Export multiple bindings |
+| `import M` | Import all exports of `M` |
+| `import { f } from M` | Import specific binding |
+| `import M prefix P$` | Import with prefix |
+| `import { f as g } from M` | Rename on import |
+| `import M<T, 4>` | Generic module specialization |
+| `import "path/M"` | Import from file path |
+| `include "file.compact"` | Splice file inline |
+| `import CompactStandardLibrary` | Built-in stdlib |
 
 ---
 
 ## Cross-Links
 
-- **Next:** [Setting Up the Compiler](./chapter-02.md), Install the toolchain
-- **See also:** [Ledger State](./chapter-04.md), How the two-world model works
-- **See also:** [Explicit Disclosure](./chapter-07.md), How selective disclosure works
+- **Previous:** [Standard Library](./chapter-10.md)  Built-in utilities
+- **Next:** [Compact Grammar](./chapter-12.md)  Syntax rules
+- **See also:** [Writing a Contract](./chapter-03.md)  Contract structure
+- **See also:** [Data Types](./chapter-08.md)  Type definitions
+- **Examples:** [11.01 Module](../examples/11.01.module.compact) · [11.02 Imports](../examples/11.02.imports.compact) · [11.03 Exports](../examples/11.03.exports.compact)

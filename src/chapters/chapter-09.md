@@ -1,336 +1,218 @@
-# Ledger ADTs
+# Ledger State
 
-This note covers the collection types available for on-chain state, when to use each and the tradeoffs.
+This note explains the ledger  Midnight's public state layer  and how it relates to private state.
 
-> **Docs:** [Ledger ADT](https://docs.midnight.network/compact/reference/ledger-adt)
-> **Examples:** [09.01 ADTs](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact) · [09.02 Merkle Trees](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact) · [09.03 Kernel](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact)
+> **Docs:** [Ledger ADT](https://docs.midnight.network/compact/reference/ledger-adt) · [Ledger State](https://docs.midnight.network/compact/reference/compact-reference#declaring-and-maintaining-public-state)
+> **Examples:** [04.01 Commitment Pattern](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact)
 
 ---
 
 ## Intuition First
 
-Ledger ADTs are the data structures you use for on-chain state. They're not like in-memory data structures in TypeScript, they're persistent, on-chain, and their operations produce verifiable state transitions.
+The ledger is Midnight's **public world**. Every node on the network stores it. Everyone can read it.
 
-Each type optimizes for a specific access pattern:
+Private data (witnesses) lives on the user's local machine and never touches the chain. The two are connected by `disclose()`, a compile-time annotation that marks intentional disclosure.
 
-- **Counter**, Low-contention atomic counters
-- **Set**, Membership tracking
-- **Map**, Key-value storage
-- **List**, Ordered queue
-- **MerkleTree**, Membership proofs with a single root
-- **HistoricMerkleTree**, Membership proofs across time
-
-The choice matters because the on-chain representation affects what your circuits can prove.
+The key insight: **privacy is the default, not opt-in.** Private data stays private unless you explicitly mark it for disclosure.
 
 ---
 
-## Counter
+## The Two Worlds
 
-A simple unsigned counter. The key advantage over `Cell<Uint<64>>` is that `Counter` does not read the current value when incrementing, so transactions are less likely to be rejected due to contention.
-
-```compact
-ledger votes: Counter;
-
-export circuit vote(): [] {
-  votes += 1;
-}
-
-export circuit retract(): [] {
-  votes -= 1;
-}
-
-export circuit getVotes(): Uint<64> {
-  return votes;
-}
-```
-
-Operations:
-
-| Operation | Syntax | What it does |
-|----------|--------|-----------|
-| Increment | `field += n` | Add `n`, no read required |
-| Decrement | `field -= n` | Subtract `n`, errors if negative |
-| Read | `field` | Returns as `Uint<64>` |
-| Compare | `field.lessThan(n)` | Returns `Boolean` |
-
-**Why low contention?** A normal `Uint<64>` read-modify-write has three steps: read the value, add one, write back. Under concurrent calls, two transactions might read the same value and both write the same new value. `Counter` combines these steps atomically.
+| Property | `export ledger` | Private state (witnesses) |
+|----------|----------------|--------------------|
+| Where it lives | Every network node | User's local storage |
+| Who can read it | Everyone | Only the owner |
+| On-chain representation | Plaintext value | Nothing (commitment or nothing) |
+| How it's updated | Via ZK proof | Never touches the chain |
+| Update mechanism | Ledger assignment | Witness callbacks |
 
 ---
 
-## Cell (Plain Types)
+## Ledger State Updates
 
-When you declare `ledger f: T` without a collection type, it's implicitly a `Cell<T>`. Read and write operations use shorthand.
+![Ledger Update Flow](../images/ledger_update_flow.png)
 
-```compact
-ledger owner: Bytes<32>;
-
-export circuit setOwner(addr: Bytes<32>): [] {
-  owner = disclose(addr);  // shorthand for owner.write(...)
-}
-
-export circuit getOwner(): Bytes<32> {
-  return owner;  // shorthand for owner.read()
-}
-```
-
-`Cell<T>` is the default. Use it for single, mutable values.
+The ledger update happens atomically with the proof. Either the proof is valid and the state changes, or it isn't and nothing changes.
 
 ---
 
-## Set
-
-An unbounded set of unique values. Inserting a duplicate is a no-op.
+## Declaring Ledger Fields
 
 ```compact
-ledger allowlist: Set<Bytes<32>>;
-
-export circuit addAddress(addr: Bytes<32>): [] {
-  allowlist.insert(disclose(addr));
-}
-
-export circuit isAllowed(addr: Bytes<32>): Boolean {
-  return allowlist.member(addr);
-}
+ledger val: Field;                                    // basic field
+export ledger cnt: Counter;                           // exported, readable
+sealed ledger config: Uint<32>;                       // write-once
+export sealed ledger mapping: Map<Boolean, Field>;  // exported + sealed
 ```
 
-Operations:
+| Modifier | Meaning |
+|----------|--------|
+| `export` | Readable from TypeScript (your DApp) |
+| `sealed` | Writeable only during initialization |
 
-| Operation | Syntax | What it does |
-|----------|--------|-----------|
-| Insert | `set.insert(v)` | Add value, duplicate is no-op |
-| Remove | `set.remove(v)` | Remove value |
-| Check | `set.member(v)` | Returns `Boolean` |
-| Empty check | `set.isEmpty()` | Returns `Boolean` |
-| Size | `set.size()` | Returns `Uint<64>` |
-| Reset | `set.resetToDefault()` | Clears the set |
+- `ledger` without modifiers = basic, non-exported field
+- `export ledger` = readable by your DApp
+- `sealed ledger` = writeable during initialization only
+- `export sealed ledger` = both
 
-Useful for allowlists, denylists, and membership tracking.
+All ledger fields initialize to their type's default (zero, empty, first variant, etc.). The constructor can override them.
 
 ---
 
-## Map
+## The `disclose()` Boundary
 
-An unbounded key-value mapping. Values can be other ledger-state types (except `Kernel`).
+`disclose()` is a **compile-time annotation**, not encryption. It tells the compiler: "I am intentionally disclosing witness data."
 
 ```compact
-ledger balances: Map<Bytes<32>, Uint<64>>;
-
-export circuit setBalance(addr: Bytes<32>, amount: Uint<64>): [] {
-  balances.insert(disclose(addr), disclose(amount));
+// Without disclose(): compiler error
+export circuit record(): [] {
+  stored = getSecret();   // error: potential witness disclosure
 }
 
-export circuit getBalance(addr: Bytes<32>): Uint<64> {
-  return balances.lookup(addr);
+// With disclose(): compiles
+export circuit record(): [] {
+  stored = disclose(getSecret());  // ok: declared
 }
 ```
 
-Operations:
+The compiler tracks witness data through every operation, arithmetic, type conversions, function calls. If witness data could reach the ledger without `disclose()`, you get a compiler error.
 
-| Operation | Syntax | What it does |
-|----------|--------|-----------|
-| Insert | `map.insert(k, v)` | Add or update key-value |
-| Lookup | `map.lookup(k)` | Returns value (errors if missing) |
-| Check | `map.member(k)` | Returns `Boolean` |
-| Remove | `map.remove(k)` | Delete key-value |
-| Empty check | `map.isEmpty()` | Returns `Boolean` |
-| Size | `map.size()` | Returns `Uint<64>` |
-
-### Nested Maps
-
-```compact
-ledger fld: Map<Boolean, Map<Field, Counter>>;
-
-export circuit increment(b: Boolean, n: Field, k: Uint<16>): [] {
-  fld.lookup(b).lookup(n) += disclose(k);
-}
-```
-
-Rules for nesting:
-- Nested values must be initialized before first use.
-- The entire indirection chain must be used in a single expression.
-- Only `Map` values can contain ledger-state types.
-- `Kernel` cannot be nested.
+**What this means:** You cannot accidentally leak private data. The compiler enforces the privacy boundary.
 
 ---
 
-## List
+## When to Use `export ledger`
 
-An unbounded ordered list. Elements are pushed and popped from the front.
+**Good candidates for `export ledger`:**
 
-```compact
-ledger queue: List<Field>;
+| Candidate | Why it belongs on-chain |
+|-----------|----------------------|
+| Global invariants (total supply, reserve balance) | Everyone needs to see them |
+| State flags others react to | Needed for coordination |
+| Commitments to private values (the hash, not the value) | Proves existence without revealing |
+| Data your frontend needs to read directly | Otherwise you can't display it |
 
-export circuit enqueue(v: Field): [] {
-  queue.pushFront(disclose(v));
-}
+**Bad candidates:**
 
-export circuit dequeue(): [] {
-  queue.popFront();
-}
+| Candidate | Why it doesn't belong on-chain |
+|-----------|------------------------|
+| Per-user balances | Only one user cares |
+| Personal data | Privacy violation |
+| Any value belonging to only one user | No one else needs it |
 
-export circuit peek(): Field {
-  return queue.head().value;
-}
-```
-
-Operations:
-
-| Operation | Syntax | What it does |
-|----------|--------|-----------|
-| Push | `list.pushFront(v)` | Add to front |
-| Pop | `list.popFront()` | Remove from front |
-| Head | `list.head()` | Returns `Maybe<T>` |
-| Empty check | `list.isEmpty()` | Returns `Boolean` |
-| Length | `list.length()` | Returns `Uint<64>` |
-
-`head()` returns `Maybe<T>`, check `.isSome` before accessing `.value`.
+**Heuristic:** If removing this field would break another user's ability to interact with the contract, it belongs in `export ledger`.
 
 ---
 
-## MerkleTree
+## The Commitment Pattern
 
-A bounded Merkle tree of depth `n` (2 ≤ n ≤ 32). Use when you need to prove membership against the **current** root.
+![Commitment Pattern](../images/ledger_commitment_pattern.png)
+
+If `export ledger` puts values on-chain as plaintext, and private state keeps values off-chain entirely, how do you verify something about private state?
+
+**Answer: commitments.** Store the hash on-chain. Keep the value off-chain. Prove knowledge of the value without revealing it.
 
 ```compact
-ledger members: MerkleTree<8, Bytes<32>>;
+export ledger balanceCommitments: Map<Bytes<32>, Bytes<32>>;
 
-export circuit addMember(leaf: Bytes<32>): [] {
-  members.insert(disclose(leaf));
-}
-
-export circuit checkMembership(root: MerkleTreeDigest): Boolean {
-  return members.checkRoot(root);
+export circuit commitBalance(value: Uint<64>): [] {
+  const nonce = freshNonce();
+  const commitment = persistentCommit<Uint<64>>(value, nonce);
+  balanceCommitments.insert(disclose(callerAddress()), disclose(commitment));
 }
 ```
 
-Operations:
-
-| Operation | Syntax | What it does |
-|----------|--------|-----------|
-| Insert | `merkle.insert(v)` | Add leaf, update root |
-| Check | `merkle.checkRoot(digest)` | Verify leaf against current root |
-| Full check | `merkle.isFull()` | Returns `Boolean` |
-| Root | `merkle.root()` | Read-only in TypeScript |
-
-**What this enables:** A compact proof that a value is a member of the set, without revealing the value or the full set. The proof is a Merkle path, a sequence of sibling hashes from the leaf to the root.
-
-**Use case:** Prove you know a secret in a set without revealing the secret.
+**Critical:** The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.
 
 ---
 
-## HistoricMerkleTree
+## Commitment Tools
 
-Like `MerkleTree` but retains past roots. Use when you need to prove membership against **any past root**.
+| Function | Output | Persists? | For ledger? | Witness-tainted? |
+|----------|--------|-----------|------------|------------------|
+| `transientHash` | `Field` | No | No | Yes |
+| `transientCommit` | `Field` | No | No | **No** |
+| `persistentHash` | `Bytes<32>` | Yes | Yes | Yes |
+| `persistentCommit` | `Bytes<32>` | Yes | Yes | **No** |
 
-```compact
-ledger commitments: HistoricMerkleTree<16, Bytes<32>>;
-
-export circuit addCommitment(leaf: Bytes<32>): [] {
-  commitments.insert(disclose(leaf));
-}
-
-export circuit verifyOldMembership(root: MerkleTreeDigest): Boolean {
-  return commitments.checkRoot(root);  // accepts any past root
-}
-```
-
-**What this enables:** Proving that a commitment existed at a past point in time. Useful for nullifier-based systems where you need to prevent double-spending.
+- **Persistent:** Survives contract upgrades. Use for long-term storage.
+- **Transient:** Does not survive upgrades. Use for temporary computations.
+- **Commit (vs hash):** Includes a random nonce. The nonce hides the input even if the value is known. Use when the value might be guessable.
 
 ---
 
-## Kernel
+## Ledger-State Types
 
-A special ledger-state type that provides access to built-in ledger operations.
-
-```compact
-ledger kern: Kernel;
-
-export circuit checkTime(deadline: Uint<64>): Boolean {
-  return kern.blockTimeLessThan(deadline);
-}
-
-export circuit selfAddress(): ContractAddress {
-  return kern.self();
-}
-```
-
-Operations:
-
-| Operation | What it does |
-|-----------|-------------|
-| `kern.self()` | Returns this contract's address |
-| `kern.blockTimeLessThan(t)` | Check time against deadline |
-| `kern.balance()` | Check native token balance |
-| `kern.mintShielded(...)` | Mint shielded tokens |
-| `kern.mintUnshielded(...)` | Mint unshielded tokens |
-| `kern.checkpoint()` | Create a checkpoint for upgrades |
-
-`Kernel` cannot be nested in a `Map`.
+| Type | What it is |
+|------|-----------|
+| `T` (any type) | A single `Cell<T>`, readable and writable |
+| `Counter` | Unsigned counter with atomic increment (low contention) |
+| `Set<T>` | Unbounded set of unique values |
+| `Map<K, V>` | Unbounded key-value mapping |
+| `List<T>` | Unbounded ordered list (pushFront/popFront) |
+| `MerkleTree<n, T>` | Bounded Merkle tree of depth n (2 ≤ n ≤ 32) |
+| `HistoricMerkleTree<n, T>` | Like `MerkleTree` but retains past roots |
+| `Kernel` | Built-in operations (block time, tokens, address) |
 
 ---
 
-## Choosing the Right ADT
+## Choosing the Right Type
 
-| Use case | ADT | Why |
-|---------|-----|-----|
-| Single mutable value | `Cell<T>` | Simple, direct access |
-| Atomic counter (low contention) | `Counter` | Increment without read |
-| Membership tracking | `Set<T>` | O(1) insert, check, remove |
-| Per-key storage | `Map<K, V>` | Key-value with O(1) lookup |
-| Nested per-key storage | `Map<K, Map<K2, V>>` | Two-level lookup |
-| Ordered queue | `List<T>` | Push/pop from front |
-| Current membership proof | `MerkleTree<n, T>` | Single-root membership |
-| Historical membership proof | `HistoricMerkleTree<n, T>` | Multi-root membership |
-| Block time, tokens, address | `Kernel` | Built-in operations |
+| Use case | ADT |
+|---------|-----|
+| Single mutable value | `ledger f: T` (Cell) |
+| Monotonically growing counter (low contention) | `Counter` |
+| Membership tracking | `Set<T>` |
+| Per-key storage | `Map<K, V>` |
+| Ordered queue | `List<T>` |
+| ZK membership proofs (current root only) | `MerkleTree<n, T>` |
+| ZK membership proofs (any past root) | `HistoricMerkleTree<n, T>` |
+| Block time, tokens, contract address | `Kernel` |
 
 ---
 
 ## Common Mistakes
 
-1. **Using `Map` when `Set` suffices.** If you only need membership check, use `Set`. `Map` has more overhead for the value storage.
+1. **Treating `export ledger` as encrypted.** It isn't. Everything in `export ledger` is plaintext and readable by everyone. If you need privacy, use the commitment pattern.
 
-2. **Forgetting that `List` pushes from front.** `pushFront` adds to the front, `popFront` removes from the front. This is a stack, not a queue, the name reflects the storage order, not the access pattern.
+2. **Forgetting that witnesses never touch the chain.** Witness data stays local. Only the proof goes on-chain. You cannot store witness data directly, you must `disclose()` it first.
 
-3. **Not initializing nested values.** Before accessing `map.lookup(k).lookup(k2)`, the inner `Map` for `k` must exist. The compiler requires the entire chain in one expression.
+3. **Reusing nonces.** Two commitments with the same nonce and value are identical on-chain. Always use a fresh nonce.
 
-4. **Using `MerkleTree` when you need historical proofs.** `MerkleTree` only proves against the current root. If you need past roots, use `HistoricMerkleTree`.
+4. **Putting per-user data in the ledger.** If only one user cares about a value, it shouldn't be in the ledger. It's a privacy leak.
 
-5. **Nesting `Kernel` in `Map`.** Not allowed. `Kernel` is a special type with built-in operations, it cannot be nested.
+5. **Using `transientHash` for ledger storage.** Transient values don't survive contract upgrades. Use `persistentHash` or `persistentCommit`.
 
 ---
 
 ## Comparison Layer
 
-| ADT | Solidity equivalent | Note |
-|-----|---------------------|-----|
-| `Cell<T>` | `uint256` | Simple storage slot |
-| `Counter` | N/A | Atomic increment |
-| `Set<T>` | `mapping → bool` | Unique membership |
-| `Map<K, V>` | `mapping(K ⇒ V)` | Key-value |
-| `List<T>` | `uint256[]` | Ordered with overhead |
-| `MerkleTree` | N/A | ZK-native, not Solidity-native |
-| `Kernel` | built-in | Block time, tokens |
+| Concept | Solidity | Rust | Compact |
+|---------|---------|------|--------|
+| Public state | `uint256 publicVar` | storage fields | `export ledger f: T` |
+| Private state | `private uint256` (still on chain) | `u64` in memory | `witness` (stays local) |
+| State updates | direct assignment | `storage.write()` | via ZK proof |
+| Reading state | `Contract.state()` | direct read | `ledger(state)` |
 
 ---
 
 ## Quick Recap
 
-- **Counter**, Low contention, atomic increment without read.
-- **Cell**, Default for single values. Read/write shorthand.
-- **Set**, Membership tracking, unique values.
-- **Map**, Key-value with nested ledger types.
-- **List**, Ordered stack, push/pop from front.
-- **MerkleTree**, Current-root membership proofs.
-- **HistoricMerkleTree**, Any-past-root membership proofs.
-- **Kernel**, Built-in operations (time, tokens, address). Cannot be nested.
-- Choose based on access patterns. The ADT affects what your circuits can prove.
+- The ledger is public on-chain state. Everyone can read it.
+- Private data (witnesses) stays local. Only the proof goes on-chain.
+- `disclose()` marks intentional disclosure. It's a compile-time annotation, not encryption.
+- Store commitments on-chain. Keep values off-chain. Prove knowledge without revealing.
+- Always use a fresh nonce for commitments. Reuse = privacy leak.
+- `transient*` doesn't survive upgrades. `persistent*` does.
+- `transientCommit` can commit private values without `disclose()`. The random nonce provides sufficient hiding.
 
 ---
 
 ## Cross-Links
 
-- **Previous:** [Data Types](./chapter-08.md)  Type system
-- **Next:** [Standard Library](./chapter-10.md)  Hashing and token functions
-- **See also:** [Ledger State](./chapter-04.md)  Commitment patterns
-- **See also:** [Standard Library](./chapter-10.md)  Merkle tree functions
-- **Examples:** [09.01 ADTs](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.01.adts.compact) · [09.02 Merkle Trees](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.02.merkle.compact) · [09.03 Kernel](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/09.03.kernel.compact)
+- **Previous:** [Writing a Contract](./chapter-03.md)  Contract structure
+- **Next:** [Circuits](./chapter-05.md)  How circuits work
+- **See also:** [Explicit Disclosure](./chapter-07.md)  The disclose() boundary in depth
+- **See also:** [Ledger ADTs](./chapter-09.md)  Map, Set, MerkleTree details
+- **Examples:** [04.01 Commitment Pattern](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact)

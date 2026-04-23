@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Witnesses - Compact Book</title>
+        <title>Fixup Usage - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,200 +174,122 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="witnesses"><a class="header" href="#witnesses">Witnesses</a></h1>
-<p>This note explains witnesses, the mechanism that brings private data into circuits without ever touching the chain.</p>
+                        <h1 id="fixup-usage"><a class="header" href="#fixup-usage">Fixup Usage</a></h1>
+<p>This note covers the Compact fixup tool, which automatically migrates your code when the language changes.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-witnesses-for-private-state-management">Declaring Witnesses</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/fixup-usage">Fixup Usage</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>A witness is a callback function. You declare its type in Compact, but the body is provided by your TypeScript DApp at runtime. When a circuit calls a witness, it runs locally on the user’s device, the value it returns never goes on-chain. Instead, a ZK proof proves the circuit executed correctly given that value.</p>
-<p>The name “witness” comes from ZK literature. In a proof, the witness is the secret data that proves a statement is true, without revealing what that data is. In Compact, witnesses are exactly that: secret inputs that prove the circuit ran correctly.</p>
+<p>The fixup tool exists because Compact evolves. When the language adds new syntax or changes existing behavior, old code may not compile.</p>
+<p>Fixup reads your source file, applies automatic migrations for known language changes, writes the updated code. It’s like a linter that fixes things for you.</p>
+<p>Fixup doesn’t make arbitrary changes. It only applies known transformations from documented language changes.</p>
 <hr>
-<h2 id="mental-model"><a class="header" href="#mental-model">Mental Model</a></h2>
-<p><strong>Witnesses are private inputs, not parameters.</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Parameters (to circuits)</th><th>Witnesses</th></tr>
-</thead>
-<tbody>
-<tr><td>Passed explicitly when calling</td><td>Provided by DApp at runtime</td></tr>
-<tr><td>Visible in the proof inputs</td><td>Stay local, never on chain</td></tr>
-<tr><td>Public (anyone can see them)</td><td>Private (only the caller knows)</td></tr>
-<tr><td>Compiler enforces type</td><td>DApp provides implementation</td></tr>
-</tbody>
-</table>
-</div>
-<p>When you call a circuit, you pass public parameters. The circuit can also call witnesses internally. The witness returns a value, and the circuit uses it, but only the proof goes on-chain.</p>
-<hr>
-<h2 id="the-flow"><a class="header" href="#the-flow">The Flow</a></h2>
-<p><img src="../images/witness_circuit_flow.png" alt="Witness + Circuit Flow"></p>
-<hr>
-<h2 id="declaring-a-witness"><a class="header" href="#declaring-a-witness">Declaring a Witness</a></h2>
-<pre><code class="language-compact">witness secretKey(): Bytes&lt;32&gt;;
-witness getBalance(addr: Bytes&lt;32&gt;): Uint&lt;64&gt;;
-witness userNonce(): Field;
-witness getItem&lt;T&gt;(index: Uint&lt;32&gt;): T;  // generic
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<p>Fixup comes with the Compact toolchain:</p>
+<pre><code class="language-bash">fixup-compact --version
 </code></pre>
-<p>Witness declarations have no body. The body is provided by your TypeScript DApp.</p>
 <hr>
-<h2 id="calling-a-witness"><a class="header" href="#calling-a-witness">Calling a Witness</a></h2>
-<pre><code class="language-compact">export circuit clear(): [] {
-  const sk = secretKey();           // call witness: returns private data
-  const pk = publicKey(round, sk); // compute with it: still private
-  assert(authority == pk, "Not authorized");
-  state = State.UNSET;
-  round.increment(1);
-}
+<h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
+<h3 id="fixup-to-standard-output"><a class="header" href="#fixup-to-standard-output">Fixup to Standard Output</a></h3>
+<pre><code class="language-bash">fixup-compact contracts/contract.compact
 </code></pre>
-<p>The witness call happens locally. The ZK proof proves the computation was correct, without revealing <code>sk</code>.</p>
-<hr>
-<h2 id="the-compiler-tracks-witness-data"><a class="header" href="#the-compiler-tracks-witness-data">The Compiler Tracks Witness Data</a></h2>
-<p>The compiler tracks witness data through every operation, arithmetic, type conversions, struct construction, function calls. Once data comes from a witness, it’s “tainted”, the compiler knows it’s private.</p>
-<pre><code class="language-compact">export circuit example(): [] {
-  const s = getSecret();
-  const doubled = s + s;              // still witness data
-  const converted = s as Uint&lt;64&gt;;    // still witness data
-  ledger = doubled;                  // compiler error: undeclared disclosure
-}
+<p>Prints the updated code to stdout.</p>
+<h3 id="fixup-to-a-file"><a class="header" href="#fixup-to-a-file">Fixup to a File</a></h3>
+<pre><code class="language-bash">fixup-compact contracts/contract.compact fixed/contract.compact
 </code></pre>
-<p>This is the <strong>witness protection program</strong>, the compiler prevents accidental disclosure of private data.</p>
-<hr>
-<h2 id="when-disclosure-is-required"><a class="header" href="#when-disclosure-is-required">When Disclosure Is Required</a></h2>
-<p>When witness data needs to flow into the public ledger, wrap it in <code>disclose()</code>:</p>
-<pre><code class="language-compact">// Without: compiler error
-export circuit record(): [] {
-  balance = getBalance();  // error: witness data going to ledger
-}
-
-// With: compiles
-export circuit record(): [] {
-  balance = disclose(getBalance());  // ok: declared
-}
+<p>Writes to the specified output file.</p>
+<h3 id="fixup-in-place"><a class="header" href="#fixup-in-place">Fixup In-Place</a></h3>
+<pre><code class="language-bash">fixup-compact contracts/contract.compact contracts/contract.compact
 </code></pre>
-<p><code>disclose()</code> does not encrypt. It’s a compile-time annotation that says “I’m intentionally making this public.”</p>
-<hr>
-<h2 id="the-compiler-error"><a class="header" href="#the-compiler-error">The Compiler Error</a></h2>
-<p>When you forget <code>disclose()</code>, the compiler tells you exactly where the witness data came from:</p>
-<pre><code>Exception: line 6 char 11:
-  potential witness-value disclosure must be declared but is not:
-    witness value potentially disclosed:
-      the return value of witness getBalance at line 2 char 1
-    nature of the disclosure:
-      ledger operation might disclose the witness value
-</code></pre>
-<p>This trace tells you:</p>
-<ol>
-<li>Where the witness data originated (<code>getBalance</code>)</li>
-<li>Where it tried to flow (the ledger assignment)</li>
-</ol>
-<hr>
-<h2 id="indirect-disclosure"><a class="header" href="#indirect-disclosure">Indirect Disclosure</a></h2>
-<p>The compiler catches disclosure even when witness data travels through helper circuits:</p>
-<pre><code class="language-compact">circuit obfuscate(x: Field): Field {
-  return x + 73;  // output is still witness data
-}
-
-export circuit record(): [] {
-  const s = getBalance() as Field;
-  const x = obfuscate(s);
-  balance = x as Bytes&lt;32&gt;;  // compiler catches this
-}
-</code></pre>
-<p>The compiler’s abstract interpreter follows witness taint through every operation. You cannot hide witness data by passing it through arithmetic, structs, or helper functions.</p>
-<hr>
-<h2 id="place-disclosure-as-close-as-possible"><a class="header" href="#place-disclosure-as-close-as-possible">Place Disclosure As Close As Possible</a></h2>
-<pre><code class="language-compact">// Bad: declares broader scope
-export circuit process(data: PrivateData): [] {
-  const result = compute(disclose(data));  // discloses too much
-  ledger = result;
-}
-
-// Good: discloses at the boundary
-export circuit process(data: PrivateData): [] {
-  const result = compute(data);
-  ledger = disclose(result);  // discloses only what's needed
-}
-</code></pre>
-<p>Place <code>disclose()</code> as close to the disclosure point as possible. This minimizes what you’re declaring as public.</p>
-<hr>
-<h2 id="standard-library-exceptions"><a class="header" href="#standard-library-exceptions">Standard Library Exceptions</a></h2>
-<p>Some functions can handle witness data without explicit disclosure:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Function</th><th>Witness-tainted?</th><th>Why</th></tr>
-</thead>
-<tbody>
-<tr><td><code>transientCommit(e)</code></td><td><strong>No</strong></td><td>Random nonce provides sufficient hiding</td></tr>
-<tr><td><code>transientHash(e)</code></td><td>Yes</td><td>Bare hash may not hide input</td></tr>
-</tbody>
-</table>
-</div>
-<pre><code class="language-compact">// no disclose() needed
-ledger commitment: Field;
-export circuit commit(v: Field): [] {
-  const nonce = freshNonce();
-  commitment = transientCommit(v, nonce);  // nonce hides the value
-}
-</code></pre>
-<p>The nonce provides enough randomness that even knowing the value doesn’t help. This is why <code>transientCommit</code> doesn’t require <code>disclose()</code>, but <code>transientHash</code> does.</p>
-<hr>
-<h2 id="critical-witness-results-are-untrusted"><a class="header" href="#critical-witness-results-are-untrusted">Critical: Witness Results Are Untrusted</a></h2>
+<p>Overwrites the original.</p>
 <blockquote>
-<p><strong>Do not assume in your contract that the code of any <code>witness</code> function is the code that you wrote.</strong> Any DApp may provide any implementation it wants. Results should be treated as untrusted input.</p>
+<p><strong>Warning:</strong> Always output to a different file first and review the changes. Fixup can introduce errors if the transformation doesn’t apply to your code.</p>
 </blockquote>
-<p>The ZK proof guarantees the circuit’s logic ran correctly, given whatever inputs witnesses returned. It does not guarantee witnesses returned sensible values.</p>
-<p>Your contract must validate witness outputs:</p>
-<pre><code class="language-compact">// WRONG: trust the witness
-export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
-  const balance = getBalance();  // untrusted!
-  balances[to] += amount;
-}
-
-// RIGHT: validate first
-export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
-  const balance = getBalance();
-  assert(balance &gt;= amount, "Insufficient balance");  // validate!
-  balances[to] += amount;
-}
-</code></pre>
 <hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
+<h2 id="command-line-flags"><a class="header" href="#command-line-flags">Command-Line Flags</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Concept</th><th>Solidity</th><th>TypeScript</th><th>Compact</th></tr>
+<tr><th>Flag</th><th>What it does</th><th>Default</th></tr>
 </thead>
 <tbody>
-<tr><td>Private input</td><td><code>private</code> variables</td><td>class fields</td><td><code>witness</code></td></tr>
-<tr><td>Secret data</td><td>on-chain (encrypted)</td><td>in memory</td><td>stays local</td></tr>
-<tr><td>Proving computation</td><td>N/A</td><td>N/A</td><td>via circuit</td></tr>
-<tr><td>Trust model</td><td>contract code</td><td>app logic</td><td>witness is untrusted</td></tr>
+<tr><td><code>--help</code></td><td>Print help text and exit</td><td>-</td></tr>
+<tr><td><code>--version</code></td><td>Print compiler version</td><td>-</td></tr>
+<tr><td><code>--language-version</code></td><td>Print language version</td><td>-</td></tr>
+<tr><td><code>--vscode</code></td><td>Single-line error messages</td><td>-</td></tr>
+<tr><td><code>--update-Uint-ranges</code></td><td>Adjust Uint range endpoints</td><td>-</td></tr>
+<tr><td><code>--compact-path</code></td><td>Module search paths</td><td><code>$COMPACT_PATH</code> or empty</td></tr>
+<tr><td><code>--trace-search</code></td><td>Print module search progress</td><td>-</td></tr>
+<tr><td><code>--line-length n</code></td><td>Target line length</td><td>100</td></tr>
 </tbody>
 </table>
 </div>
+<h3 id="update-uint-ranges"><a class="header" href="#update-uint-ranges">Update Uint Ranges</a></h3>
+<pre><code class="language-bash">fixup-compact --update-Uint-ranges contracts/contract.compact
+</code></pre>
+<p>This transforms <code>Uint&lt;0..n&gt;</code> declarations where <code>n</code> is a constant.</p>
+<h3 id="compact-search-path"><a class="header" href="#compact-search-path">Compact Search Path</a></h3>
+<pre><code class="language-bash">fixup-compact --compact-path /path/to/modules contracts/contract.compact
+</code></pre>
+<p>Sets directories where the fixup tool searches for imported modules.</p>
+<hr>
+<h2 id="via-the-compact-cli"><a class="header" href="#via-the-compact-cli">Via the Compact CLI</a></h2>
+<p>The main <code>compact</code> CLI invokes fixup:</p>
+<pre><code class="language-bash">compact fixup contracts/           # fixup all .compact files in directory
+</code></pre>
+<hr>
+<h2 id="reviewing-changes"><a class="header" href="#reviewing-changes">Reviewing Changes</a></h2>
+<p>Always review before committing:</p>
+<pre><code class="language-bash"># 1. Fixup to a new file
+fixup-compact contracts/contract.compact fixed/contract.compact
+
+# 2. Compare
+diff contracts/contract.compact fixed/contract.compact
+
+# 3. If OK, replace
+mv fixed/contract.compact contracts/contract.compact
+
+# 4. Recompile
+compact compile contracts/contract.compact contracts/managed/contract
+</code></pre>
+<p>Never run fixup and commit without reviewing.</p>
+<hr>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
+<p>If the source file has errors that fixup can’t handle:</p>
+<pre><code class="language-bash">$ fixup-compact contracts/broken.compact
+Exception: /path/contracts/broken.compact line 12 char 5:
+  type error: expected Uint&lt;64&gt;, got Field
+</code></pre>
+<p>Fixup reports static errors and exits without producing output.</p>
+<hr>
+<h2 id="before-upgrading-the-toolchain"><a class="header" href="#before-upgrading-the-toolchain">Before Upgrading the Toolchain</a></h2>
+<pre><code class="language-bash"># 1. Update compact
+compact update
+
+# 2. Run fixup on your codebase
+compact fixup contracts/
+
+# 3. Recompile
+compact compile contracts/contract.compact contracts/managed/contract
+
+# 4. Run tests
+npm test
+</code></pre>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>Witnesses are callback functions, declared in Compact, implemented in TypeScript.</li>
-<li>They run locally on the user’s device. The value never goes on-chain.</li>
-<li>Only the ZK proof goes on-chain, it proves the circuit ran correctly given the witness inputs.</li>
-<li>The compiler tracks witness data through every operation.</li>
-<li>If witness data reaches the ledger without <code>disclose()</code>, the compiler errors.</li>
-<li><code>transientCommit</code> is an exception, the random nonce provides hiding without <code>disclose()</code>.</li>
-<li><strong>Always validate witness outputs.</strong> The proof proves correct logic, not sensible inputs.</li>
+<li>Fixup automatically migrates code for language changes.</li>
+<li>Always review changes before committing.</li>
+<li>Recompile and test after applying fixup.</li>
+<li>Fixup doesn’t fix logic errors, only deprecated syntax.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-05.html">Circuits</a>  Constraint declarations</li>
-<li><strong>Next:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Deep dive on disclose()</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>  Public vs private</li>
-<li><strong>See also:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Full example</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/06.01.witnesses.compact">06.01 Witnesses</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-17.html">Formatter Usage</a>  Code formatting</li>
+<li><strong>Next:</strong> <a href="./chapter-18.html">Neovim Setup</a>  Editor integration</li>
+<li><strong>See also:</strong> <a href="./chapter-14.html">Testing and Debugging</a>  Error handling</li>
 </ul>
 
                     </main>
@@ -405,6 +327,22 @@ export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] {
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

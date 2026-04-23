@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Ledger State - Compact Book</title>
+        <title>Compact Grammar - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -174,43 +174,118 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ledger-state"><a class="header" href="#ledger-state">Ledger State</a></h1>
-<p>This note explains the ledger  Midnight’s public state layer  and how it relates to private state.</p>
+                        <h1 id="compact-grammar"><a class="header" href="#compact-grammar">Compact Grammar</a></h1>
+<p>This note is a readable reference for Compact’s syntax, the rules that shape what you write. The formal grammar is EBNF; this note translates it into what you actually type.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/ledger-adt">Ledger ADT</a> · <a href="https://docs.midnight.network/compact/reference/compact-reference#declaring-and-maintaining-public-state">Ledger State</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></p>
+<p><strong>Goal after this note:</strong> Read Compact fluently. Know what’s legal syntax vs. what’s a language rule.
+<strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-grammar">Compact Grammar</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>The ledger is Midnight’s <strong>public world</strong>. Every node on the network stores it. Everyone can read it.</p>
-<p>Private data (witnesses) lives on the user’s local machine and never touches the chain. The two are connected by <code>disclose()</code>, a compile-time annotation that marks intentional disclosure.</p>
-<p>The key insight: <strong>privacy is the default, not opt-in.</strong> Private data stays private unless you explicitly mark it for disclosure.</p>
+<p>Compact’s grammar is deliberately TypeScript-adjacent, but the differences are load-bearing. TypeScript lets you write almost anything, Compact enforces structure at every level:</p>
+<ul>
+<li>Every expression has a type known at compile time.</li>
+<li>Every program element is one of a fixed set of forms.</li>
+<li>Operators have a fixed precedence order.</li>
+<li>Some TypeScript patterns (<code>return</code> in loops, mixed field separators, two-armed <code>if</code> as the “then” of another <code>if</code>) are simply not valid.</li>
+</ul>
+<p>The grammar isn’t a style guide. It’s the contract between you and the compiler. If your code follows the grammar, it compiles. If it doesn’t, it doesn’t.</p>
 <hr>
-<h2 id="the-two-worlds"><a class="header" href="#the-two-worlds">The Two Worlds</a></h2>
+<h2 id="program-structure"><a class="header" href="#program-structure">Program Structure</a></h2>
+<p>A Compact program is a flat sequence of program elements. There’s no nesting at the top level, modules contain elements, but the program itself is just one element after another:</p>
+<pre><code>program → program-element ⋯ program-element
+</code></pre>
+<p>Valid elements (in any order, subject to scope rules):</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Property</th><th><code>export ledger</code></th><th>Private state (witnesses)</th></tr>
+<tr><th>Element</th><th>Keyword(s)</th><th>Purpose</th></tr>
 </thead>
 <tbody>
-<tr><td>Where it lives</td><td>Every network node</td><td>User’s local storage</td></tr>
-<tr><td>Who can read it</td><td>Everyone</td><td>Only the owner</td></tr>
-<tr><td>On-chain representation</td><td>Plaintext value</td><td>Nothing (commitment or nothing)</td></tr>
-<tr><td>How it’s updated</td><td>Via ZK proof</td><td>Never touches the chain</td></tr>
-<tr><td>Update mechanism</td><td>Ledger assignment</td><td>Witness callbacks</td></tr>
+<tr><td>Pragma</td><td><code>pragma</code></td><td>Version constraint</td></tr>
+<tr><td>Module</td><td><code>module</code></td><td>Namespace block</td></tr>
+<tr><td>Import</td><td><code>import</code></td><td>Bring in another module</td></tr>
+<tr><td>Include</td><td><code>include</code></td><td>Inline splice from file</td></tr>
+<tr><td>Struct</td><td><code>struct</code></td><td>Record type</td></tr>
+<tr><td>Enum</td><td><code>enum</code></td><td>Sum type</td></tr>
+<tr><td>Type alias</td><td><code>type</code> / <code>new type</code></td><td>Alias</td></tr>
+<tr><td>Ledger</td><td><code>ledger</code></td><td>On-chain state</td></tr>
+<tr><td>Witness</td><td><code>witness</code></td><td>Private input</td></tr>
+<tr><td>Constructor</td><td><code>constructor</code></td><td>Init</td></tr>
+<tr><td>Export</td><td><code>export</code></td><td>Entry point marker</td></tr>
+</tbody>
+</table>
+</div>
+<p>Module order rule: a module must be <strong>defined before it is imported</strong>. Circular imports are not allowed.</p>
+<hr>
+<h2 id="pragma"><a class="header" href="#pragma">Pragma</a></h2>
+<pre><code>pragma language_version &gt;= 0.22;
+pragma compiler_version &gt;= 0.30.0 &amp;&amp; !0.30.1;
+</code></pre>
+<p>Version expressions support <code>||</code>, <code>&amp;&amp;</code>, <code>!</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&gt;</code>, and grouping with <code>()</code>. Both <code>major.minor</code> and <code>major.minor.patch</code> forms are valid.</p>
+<p>Always put the pragma first. It’s the first thing the compiler reads.</p>
+<hr>
+<h2 id="module"><a class="header" href="#module">Module</a></h2>
+<pre><code>module Math&lt;T&gt; {
+  export circuit add(a: T, b: T): T { return a + b; }
+  circuit helper(x: T): T { return x; }  // private to Math
+}
+</code></pre>
+<p>Generic modules are specialized at import time:</p>
+<pre><code class="language-compact">import Math&lt;Field, 4&gt;;
+</code></pre>
+<p><code>export</code> makes a binding visible outside the module. Without it, the binding is private.</p>
+<hr>
+<h2 id="import"><a class="header" href="#import">Import</a></h2>
+<pre><code>import Math;                          // all exports
+import { add } from Math;             // specific
+import { add as plus } from Math;    // renamed
+import Math prefix M$;                // prefixed: M$add
+import Math&lt;Field, 4&gt;;               // specialized
+import "utils/Math";                 // from file path
+</code></pre>
+<p>File imports look for <code>.compact</code> in the same directory or relative path. Set the search path with <code>--compact-path</code> or <code>COMPACT_PATH</code>.</p>
+<hr>
+<h2 id="ledger-declaration"><a class="header" href="#ledger-declaration">Ledger Declaration</a></h2>
+<pre><code>ledger count: Counter;
+export ledger owner: Bytes&lt;32&gt;;
+export sealed ledger config: Uint&lt;32&gt;;
+</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Form</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ledger x: T</code></td><td>Basic field, non-exported</td></tr>
+<tr><td><code>export ledger x: T</code></td><td>Readable from TypeScript</td></tr>
+<tr><td><code>sealed ledger x: T</code></td><td>Writeable only in constructor</td></tr>
+<tr><td><code>export sealed ledger x: T</code></td><td>Both</td></tr>
 </tbody>
 </table>
 </div>
 <hr>
-<h2 id="ledger-state-updates"><a class="header" href="#ledger-state-updates">Ledger State Updates</a></h2>
-<p><img src="../images/ledger_update_flow.png" alt="Ledger Update Flow"></p>
-<p>The ledger update happens atomically with the proof. Either the proof is valid and the state changes, or it isn’t and nothing changes.</p>
+<h2 id="witness-declaration"><a class="header" href="#witness-declaration">Witness Declaration</a></h2>
+<pre><code>witness secretKey(): Bytes&lt;32&gt;;
+witness getItem&lt;T&gt;(index: Uint&lt;32&gt;): T;
+</code></pre>
+<p>Witnesses have no body in Compact. The body is provided by the TypeScript DApp. Generics are supported.</p>
 <hr>
-<h2 id="declaring-ledger-fields"><a class="header" href="#declaring-ledger-fields">Declaring Ledger Fields</a></h2>
-<pre><code class="language-compact">ledger val: Field;                                    // basic field
-export ledger cnt: Counter;                           // exported, readable
-sealed ledger config: Uint&lt;32&gt;;                       // write-once
-export sealed ledger mapping: Map&lt;Boolean, Field&gt;;  // exported + sealed
+<h2 id="constructor"><a class="header" href="#constructor">Constructor</a></h2>
+<pre><code>constructor(sk: Bytes&lt;32&gt;, v: Uint&lt;64&gt;) {
+  authority = disclose(publicKey(round, sk));
+  value = disclose(v);
+}
+</code></pre>
+<p>Runs once on deployment. Parameters come from the deploy transaction. Use <code>disclose()</code> for values that should be public from the start.</p>
+<hr>
+<h2 id="circuit-definition"><a class="header" href="#circuit-definition">Circuit Definition</a></h2>
+<pre><code>circuit add(a: Field, b: Field): Field { return a + b; }
+export circuit get(): Uint&lt;64&gt; { return value; }
+export pure circuit hash&lt;T&gt;(v: T): Bytes&lt;32&gt; {
+  return persistentHash&lt;T&gt;(v);
+}
 </code></pre>
 <div class="table-wrapper">
 <table>
@@ -218,152 +293,172 @@ export sealed ledger mapping: Map&lt;Boolean, Field&gt;;  // exported + sealed
 <tr><th>Modifier</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>export</code></td><td>Readable from TypeScript (your DApp)</td></tr>
-<tr><td><code>sealed</code></td><td>Writeable only during initialization</td></tr>
+<tr><td><code>export</code></td><td>Callable from TypeScript</td></tr>
+<tr><td><code>pure</code></td><td>No ledger reads/writes, no witness calls</td></tr>
 </tbody>
 </table>
 </div>
-<ul>
-<li><code>ledger</code> without modifiers = basic, non-exported field</li>
-<li><code>export ledger</code> = readable by your DApp</li>
-<li><code>sealed ledger</code> = writeable during initialization only</li>
-<li><code>export sealed ledger</code> = both</li>
-</ul>
-<p>All ledger fields initialize to their type’s default (zero, empty, first variant, etc.). The constructor can override them.</p>
+<p>Generic circuits must be specialized before export.</p>
 <hr>
-<h2 id="the-disclose-boundary"><a class="header" href="#the-disclose-boundary">The <code>disclose()</code> Boundary</a></h2>
-<p><code>disclose()</code> is a <strong>compile-time annotation</strong>, not encryption. It tells the compiler: “I am intentionally disclosing witness data.”</p>
-<pre><code class="language-compact">// Without disclose(): compiler error
-export circuit record(): [] {
-  stored = getSecret();   // error: potential witness disclosure
-}
-
-// With disclose(): compiles
-export circuit record(): [] {
-  stored = disclose(getSecret());  // ok: declared
-}
+<h2 id="types"><a class="header" href="#types">Types</a></h2>
+<pre><code>Boolean
+Field
+Uint&lt;8&gt;
+Uint&lt;0..256&gt;
+Bytes&lt;32&gt;
+Opaque&lt;"string"&gt;
+Vector&lt;4, Field&gt;
+[Field, Boolean, Uint&lt;16&gt;]
+Maybe&lt;Field&gt;
+Map&lt;Bytes&lt;32&gt;, Uint&lt;64&gt;&gt;
 </code></pre>
-<p>The compiler tracks witness data through every operation, arithmetic, type conversions, function calls. If witness data could reach the ledger without <code>disclose()</code>, you get a compiler error.</p>
-<p><strong>What this means:</strong> You cannot accidentally leak private data. The compiler enforces the privacy boundary.</p>
-<hr>
-<h2 id="when-to-use-export-ledger"><a class="header" href="#when-to-use-export-ledger">When to Use <code>export ledger</code></a></h2>
-<p><strong>Good candidates for <code>export ledger</code>:</strong></p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Candidate</th><th>Why it belongs on-chain</th></tr>
+<tr><th>Form</th><th>What it is</th></tr>
 </thead>
 <tbody>
-<tr><td>Global invariants (total supply, reserve balance)</td><td>Everyone needs to see them</td></tr>
-<tr><td>State flags others react to</td><td>Needed for coordination</td></tr>
-<tr><td>Commitments to private values (the hash, not the value)</td><td>Proves existence without revealing</td></tr>
-<tr><td>Data your frontend needs to read directly</td><td>Otherwise you can’t display it</td></tr>
+<tr><td><code>Uint&lt;n&gt;</code></td><td>Fixed-size unsigned, 0 to 2^n - 1</td></tr>
+<tr><td><code>Uint&lt;0..n&gt;</code></td><td>Bounded unsigned, 0 to n-1</td></tr>
+<tr><td><code>Vector&lt;N, T&gt;</code></td><td>Fixed-length homogeneous sequence</td></tr>
+<tr><td><code>[T1, T2, ...]</code></td><td>Fixed-length heterogeneous tuple</td></tr>
+<tr><td><code>tref</code></td><td>User-defined or stdlib type</td></tr>
 </tbody>
 </table>
 </div>
-<p><strong>Bad candidates:</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Candidate</th><th>Why it doesn’t belong on-chain</th></tr>
-</thead>
-<tbody>
-<tr><td>Per-user balances</td><td>Only one user cares</td></tr>
-<tr><td>Personal data</td><td>Privacy violation</td></tr>
-<tr><td>Any value belonging to only one user</td><td>No one else needs it</td></tr>
-</tbody>
-</table>
-</div>
-<p><strong>Heuristic:</strong> If removing this field would break another user’s ability to interact with the contract, it belongs in <code>export ledger</code>.</p>
+<p>All types are fixed-size at compile time. No <code>any</code>, no <code>unknown</code>.</p>
 <hr>
-<h2 id="the-commitment-pattern"><a class="header" href="#the-commitment-pattern">The Commitment Pattern</a></h2>
-<p><img src="../images/ledger_commitment_pattern.png" alt="Commitment Pattern"></p>
-<p>If <code>export ledger</code> puts values on-chain as plaintext, and private state keeps values off-chain entirely, how do you verify something about private state?</p>
-<p><strong>Answer: commitments.</strong> Store the hash on-chain. Keep the value off-chain. Prove knowledge of the value without revealing it.</p>
-<pre><code class="language-compact">export ledger balanceCommitments: Map&lt;Bytes&lt;32&gt;, Bytes&lt;32&gt;&gt;;
-
-export circuit commitBalance(value: Uint&lt;64&gt;): [] {
-  const nonce = freshNonce();
-  const commitment = persistentCommit&lt;Uint&lt;64&gt;&gt;(value, nonce);
-  balanceCommitments.insert(disclose(callerAddress()), disclose(commitment));
-}
+<h2 id="struct-and-enum"><a class="header" href="#struct-and-enum">Struct and Enum</a></h2>
+<pre><code>struct Point { x: Field, y: Field }
+struct Pair&lt;T&gt; { first: T; second: T }      // semicolons ok
+enum State { UNSET, SET }
 </code></pre>
-<p><strong>Critical:</strong> The nonce must never be reused. Two commitments with the same nonce and value are identical on-chain.</p>
+<p>Field separators must be consistent, all commas or all semicolons, not mixed. Trailing separator is allowed.</p>
 <hr>
-<h2 id="commitment-tools"><a class="header" href="#commitment-tools">Commitment Tools</a></h2>
+<h2 id="type-alias"><a class="header" href="#type-alias">Type Alias</a></h2>
+<pre><code>type Hash = Bytes&lt;32&gt;;              // structural, interchangeable
+new type UserId = Bytes&lt;32&gt;;       // nominal, requires explicit cast
+type V3&lt;T&gt; = Vector&lt;3, T&gt;;       // generic
+</code></pre>
+<p>Structural aliases are fully interchangeable with the underlying type. Nominal aliases are distinct types.</p>
+<hr>
+<h2 id="blocks-and-statements"><a class="header" href="#blocks-and-statements">Blocks and Statements</a></h2>
+<pre><code>block → { stmt ⋯ stmt }
+stmt  → if ( expr ) stmt
+      | stmt0
+stmt0 → expr;
+      | const cbinding ,⋯, cbinding;
+      | if ( expr ) stmt0 else stmt
+      | for (const id of nat .. nat) stmt
+      | for (const id of expr) stmt
+      | return expr;
+      | return;
+      | block
+</code></pre>
+<p><strong>Critical parsing rule:</strong> <code>stmt</code> and <code>stmt0</code> are split because a one-armed <code>if</code> <strong>cannot</strong> be the “then” branch of a two-armed <code>if</code>.</p>
+<pre><code class="language-compact">// VALID
+if (a) { x; } else { y; }
+if (b) { z; }
+
+// INVALID, syntax error
+if (a) if (b) { x; } else { y; }
+</code></pre>
+<p>The parser sees <code>if (a) if (b) { x; }</code> as the “then” of the outer <code>if</code>, and <code>else { y; }</code> has no matching <code>if</code>. Fix by adding braces:</p>
+<pre><code class="language-compact">if (a) { if (b) { x; } } else { y; }
+</code></pre>
+<hr>
+<h2 id="patterns"><a class="header" href="#patterns">Patterns</a></h2>
+<pre><code>x                          // simple
+[a, b]                     // tuple destructure
+[a, , c]                   // skip element
+{x, y}                    // struct destructure
+{x: myX, y}                // rename
+</code></pre>
+<p>Patterns are used in parameter positions and <code>const</code> bindings. They let you unpack tuples and structs concisely.</p>
+<hr>
+<h2 id="expressions-precedence"><a class="header" href="#expressions-precedence">Expressions: Precedence</a></h2>
+<p>Operators at higher levels bind more tightly:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Function</th><th>Output</th><th>Persists?</th><th>For ledger?</th><th>Witness-tainted?</th></tr>
+<tr><th>Level</th><th>Operators</th><th>Notes</th></tr>
 </thead>
 <tbody>
-<tr><td><code>transientHash</code></td><td><code>Field</code></td><td>No</td><td>No</td><td>Yes</td></tr>
-<tr><td><code>transientCommit</code></td><td><code>Field</code></td><td>No</td><td>No</td><td><strong>No</strong></td></tr>
-<tr><td><code>persistentHash</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-<tr><td><code>persistentCommit</code></td><td><code>Bytes&lt;32&gt;</code></td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
+<tr><td><code>expr</code></td><td><code>? :</code>, <code>=</code>, <code>+=</code>, <code>-=</code></td><td>ternary, assignment</td></tr>
+<tr><td><code>expr0</code></td><td><code>||</code></td><td>logical or</td></tr>
+<tr><td><code>expr1</code></td><td><code>&amp;&amp;</code></td><td>logical and</td></tr>
+<tr><td><code>expr2</code></td><td><code>==</code>, <code>!=</code></td><td>equality</td></tr>
+<tr><td><code>expr3</code></td><td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&gt;</code></td><td>relational, non-associative</td></tr>
+<tr><td><code>expr4</code></td><td><code>as</code></td><td>type cast</td></tr>
+<tr><td><code>expr5</code></td><td><code>+</code>, <code>-</code></td><td>additive</td></tr>
+<tr><td><code>expr6</code></td><td><code>*</code></td><td>multiplicative</td></tr>
+<tr><td><code>expr7</code></td><td><code>!</code></td><td>logical not (prefix)</td></tr>
+<tr><td><code>expr8</code></td><td><code>[i]</code>, <code>.field</code>, <code>.method()</code></td><td>indexing, field access</td></tr>
+<tr><td><code>expr9</code></td><td>function calls, <code>map</code>, <code>fold</code>, literals</td><td>highest</td></tr>
 </tbody>
 </table>
 </div>
-<ul>
-<li><strong>Persistent:</strong> Survives contract upgrades. Use for long-term storage.</li>
-<li><strong>Transient:</strong> Does not survive upgrades. Use for temporary computations.</li>
-<li><strong>Commit (vs hash):</strong> Includes a random nonce. The nonce hides the input even if the value is known. Use when the value might be guessable.</li>
-</ul>
+<p><strong>Non-associative relational operators:</strong> <code>a &lt; b &lt; c</code> is a syntax error. Write <code>(a &lt; b) &amp;&amp; (b &lt; c)</code>.</p>
 <hr>
-<h2 id="ledger-state-types"><a class="header" href="#ledger-state-types">Ledger-State Types</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Type</th><th>What it is</th></tr>
-</thead>
-<tbody>
-<tr><td><code>T</code> (any type)</td><td>A single <code>Cell&lt;T&gt;</code>, readable and writable</td></tr>
-<tr><td><code>Counter</code></td><td>Unsigned counter with atomic increment (low contention)</td></tr>
-<tr><td><code>Set&lt;T&gt;</code></td><td>Unbounded set of unique values</td></tr>
-<tr><td><code>Map&lt;K, V&gt;</code></td><td>Unbounded key-value mapping</td></tr>
-<tr><td><code>List&lt;T&gt;</code></td><td>Unbounded ordered list (pushFront/popFront)</td></tr>
-<tr><td><code>MerkleTree&lt;n, T&gt;</code></td><td>Bounded Merkle tree of depth n (2 ≤ n ≤ 32)</td></tr>
-<tr><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td><td>Like <code>MerkleTree</code> but retains past roots</td></tr>
-<tr><td><code>Kernel</code></td><td>Built-in operations (block time, tokens, address)</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="expression-forms"><a class="header" href="#expression-forms">Expression Forms</a></h2>
+<pre><code>map(fn, vec)                      // transform
+fold(fn, init, vec)               // accumulate
+slice&lt;4&gt;(v, start)             // sub-vector
+[x, ...y]                       // spread
+assert(cond, "msg")             // runtime guard
+disclose(expr)                   // explicit disclosure
+pad(32, "prefix")              // padded string literal
+default&lt;T&gt;                      // default value
+</code></pre>
 <hr>
-<h2 id="choosing-the-right-type"><a class="header" href="#choosing-the-right-type">Choosing the Right Type</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Use case</th><th>ADT</th></tr>
-</thead>
-<tbody>
-<tr><td>Single mutable value</td><td><code>ledger f: T</code> (Cell)</td></tr>
-<tr><td>Monotonically growing counter (low contention)</td><td><code>Counter</code></td></tr>
-<tr><td>Membership tracking</td><td><code>Set&lt;T&gt;</code></td></tr>
-<tr><td>Per-key storage</td><td><code>Map&lt;K, V&gt;</code></td></tr>
-<tr><td>Ordered queue</td><td><code>List&lt;T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (current root only)</td><td><code>MerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>ZK membership proofs (any past root)</td><td><code>HistoricMerkleTree&lt;n, T&gt;</code></td></tr>
-<tr><td>Block time, tokens, contract address</td><td><code>Kernel</code></td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="anonymous-circuits-arrow-functions"><a class="header" href="#anonymous-circuits-arrow-functions">Anonymous Circuits (Arrow Functions)</a></h2>
+<pre><code>map((x) =&gt; x + 1, v)
+map((x: Field): Field =&gt; x + 1, v)
+map((x) =&gt; { return x + 1; }, v)
+map(double, v)                   // named circuit reference
+</code></pre>
+<p>Three forms:</p>
+<ol>
+<li><strong>Expression body:</strong> <code>=&gt; expr</code>, compact, good for single expressions</li>
+<li><strong>Block body:</strong> <code>=&gt; block</code>, for multi-statement logic</li>
+<li><strong>Named reference:</strong> <code>circuitName</code>, pass a named circuit</li>
+</ol>
+<p>Type annotations on arrow parameters are optional.</p>
+<hr>
+<h2 id="const-binding"><a class="header" href="#const-binding"><code>const</code> Binding</a></h2>
+<pre><code>const x = 42;
+const x: Field = 42;
+const [a, b] = pair;
+const {x, y}: Point = p;
+const a = 1, b = 2;           // multiple in one statement
+</code></pre>
+<p>Variables are immutable after binding. No <code>let</code>, no reassignment.</p>
+<hr>
+<h2 id="what-the-grammar-doesnt-tell-you"><a class="header" href="#what-the-grammar-doesnt-tell-you">What the Grammar Doesn’t Tell You</a></h2>
+<p>The grammar tells you what’s syntactically valid. It doesn’t tell you what passes the type checker or the witness protection program. Three layers of validation:</p>
+<ol>
+<li><strong>Syntax</strong>, Does it parse? (grammar)</li>
+<li><strong>Types</strong>, Does it type-check? (type system)</li>
+<li><strong>Privacy</strong>, Is disclosure declared? (witness protection)</li>
+</ol>
+<p>A program that passes the grammar might still fail at step 2 or 3. The error messages distinguish these.</p>
 <hr>
 <h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
 <ol>
 <li>
-<p><strong>Treating <code>export ledger</code> as encrypted.</strong> It isn’t. Everything in <code>export ledger</code> is plaintext and readable by everyone. If you need privacy, use the commitment pattern.</p>
+<p><strong>Chained relational operators.</strong> <code>a &lt; b &lt; c</code> is a syntax error. Relational operators are non-associative, use explicit parentheses.</p>
 </li>
 <li>
-<p><strong>Forgetting that witnesses never touch the chain.</strong> Witness data stays local. Only the proof goes on-chain. You cannot store witness data directly, you must <code>disclose()</code> it first.</p>
+<p><strong><code>if</code> without braces on one side of <code>else</code>.</strong> <code>if (a) if (b) { } else { }</code> parses as an orphan <code>else</code>. Use braces.</p>
 </li>
 <li>
-<p><strong>Reusing nonces.</strong> Two commitments with the same nonce and value are identical on-chain. Always use a fresh nonce.</p>
+<p><strong>Struct separator inconsistency.</strong> <code>struct S { a: T, b: T; }</code> mixes separators, not allowed. All commas or all semicolons.</p>
 </li>
 <li>
-<p><strong>Putting per-user data in the ledger.</strong> If only one user cares about a value, it shouldn’t be in the ledger. It’s a privacy leak.</p>
+<p><strong>Generic without specialization.</strong> <code>export circuit id&lt;T&gt;(x: T): T { return x; }</code> is exported but generic, invalid. Specialize first: <code>circuit idField = id&lt;Field&gt;;</code>.</p>
 </li>
 <li>
-<p><strong>Using <code>transientHash</code> for ledger storage.</strong> Transient values don’t survive contract upgrades. Use <code>persistentHash</code> or <code>persistentCommit</code>.</p>
+<p><strong>Assignment vs equality.</strong> <code>if (x = 42)</code> is assignment, not comparison. In Compact this evaluates to <code>42</code> (truthy), which is almost certainly not what you want. Use <code>==</code>.</p>
 </li>
 </ol>
 <hr>
@@ -371,46 +466,48 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Concept</th><th>Solidity</th><th>Rust</th><th>Compact</th></tr>
+<tr><th>Feature</th><th>TypeScript</th><th>Rust</th><th>Compact</th></tr>
 </thead>
 <tbody>
-<tr><td>Public state</td><td><code>uint256 publicVar</code></td><td>storage fields</td><td><code>export ledger f: T</code></td></tr>
-<tr><td>Private state</td><td><code>private uint256</code> (still on chain)</td><td><code>u64</code> in memory</td><td><code>witness</code> (stays local)</td></tr>
-<tr><td>State updates</td><td>direct assignment</td><td><code>storage.write()</code></td><td>via ZK proof</td></tr>
-<tr><td>Reading state</td><td><code>Contract.state()</code></td><td>direct read</td><td><code>ledger(state)</code></td></tr>
+<tr><td>Block body in arrow</td><td><code>x =&gt; { return x; }</code></td><td>`</td><td>x</td></tr>
+<tr><td>Type cast</td><td><code>(x as T)</code></td><td><code>x as T</code></td><td><code>x as T</code> same</td></tr>
+<tr><td>Tuple destructuring</td><td><code>const [a, b] = x</code></td><td><code>let [a, b] = x</code></td><td><code>const [a, b] = x</code> same</td></tr>
+<tr><td>Struct fields</td><td><code>,</code> or <code>;</code> (flexible)</td><td><code>,</code> only</td><td>must be consistent</td></tr>
+<tr><td>Assignment in condition</td><td>allowed</td><td>disallowed</td><td><code>x = y</code> parses but warns</td></tr>
+<tr><td>Rel chaining</td><td><code>a &lt; b &lt; c</code></td><td><code>a &lt; b &amp;&amp; b &lt; c</code></td><td>syntax error</td></tr>
+<tr><td>Generic params</td><td><code>&lt;T&gt;</code></td><td><code>&lt;T&gt;</code></td><td><code>&lt;T&gt;</code> or <code>&lt;#N&gt;</code></td></tr>
 </tbody>
 </table>
 </div>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>The ledger is public on-chain state. Everyone can read it.</li>
-<li>Private data (witnesses) stays local. Only the proof goes on-chain.</li>
-<li><code>disclose()</code> marks intentional disclosure. It’s a compile-time annotation, not encryption.</li>
-<li>Store commitments on-chain. Keep values off-chain. Prove knowledge without revealing.</li>
-<li>Always use a fresh nonce for commitments. Reuse = privacy leak.</li>
-<li><code>transient*</code> doesn’t survive upgrades. <code>persistent*</code> does.</li>
-<li><code>transientCommit</code> can commit private values without <code>disclose()</code>. The random nonce provides sufficient hiding.</li>
+<li>A program is a flat sequence of elements. A module must be defined before imported.</li>
+<li>Pragma first, everything else in any order.</li>
+<li>Struct/enum fields: all commas or all semicolons, not mixed.</li>
+<li>Relational operators are non-associative: <code>a &lt; b &lt; c</code> is a syntax error.</li>
+<li>One-armed <code>if</code> cannot be the “then” of a two-armed <code>if</code>, use braces.</li>
+<li>Generics must be specialized before export.</li>
+<li>Three validation layers: syntax → types → privacy (disclosure).</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
-<li><strong>Next:</strong> <a href="./chapter-05.html">Circuits</a>  How circuits work</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  The disclose() boundary in depth</li>
-<li><strong>See also:</strong> <a href="./chapter-09.html">Ledger ADTs</a>  Map, Set, MerkleTree details</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/04.01.commitment.compact">04.01 Commitment Pattern</a></li>
+<li><strong>Previous:</strong> <a href="./chapter-08.html">Data Types</a>  Type system</li>
+<li><strong>Next:</strong> <a href="./chapter-13.html">Keywords Reference</a>  Every keyword</li>
+<li><strong>See also:</strong> <a href="./chapter-10.html">Standard Library</a>  Built-in functions</li>
+<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.01.patterns.compact">12.01 Patterns</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.02.expressions.compact">12.02 Expressions</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/12.03.arrows.compact">12.03 Arrow Functions</a></li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../chapters/chapter-08.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../chapters/chapter-18.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../chapters/chapter-10.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapters/chapter-20.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -420,11 +517,11 @@ export circuit commitBalance(value: Uint&lt;64&gt;): [] {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../chapters/chapter-08.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../chapters/chapter-18.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../chapters/chapter-10.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapters/chapter-20.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

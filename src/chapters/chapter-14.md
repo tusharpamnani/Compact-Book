@@ -1,344 +1,229 @@
-# Testing and Debugging
+# Writing a Contract
 
-This note covers how to work with Compact's error system, understand what went wrong, fix it, and manage versions across the toolchain.
-
-> **Docs:** [Static and Dynamic Errors](https://docs.midnight.network/compact/reference/compact-reference#static-and-dynamic-errors) · [FAQ](https://docs.midnight.network/troubleshoot/faq) · [Version Mismatches](https://docs.midnight.network/how-to/fix-version-mismatches)
-> **Examples:** [14.01 Static Errors](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact)
+This note covers the structure of a Compact contract, the four mandatory pieces and how they fit together.
 
 ---
 
 ## Intuition First
 
-Compact has two error layers, not one:
+Every Compact contract has four mandatory pieces:
 
-- **Static errors**, caught by the compiler before generating any output. You see these in your terminal while developing.
-- **Dynamic errors**, caught at runtime by the generated JavaScript. You see these when a circuit executes.
+1. **`pragma`**, Declares the language version.
+2. **`export ledger`**, Public state that lives on-chain.
+3. **`witness`**, Declares where private data comes from (body is in TypeScript).
+4. **`export circuit`**, Logic that compiles to ZK circuits.
 
-Static errors are your friend. The compiler tells you exactly what's wrong and where. Dynamic errors require more detective work, the error happens inside generated code you didn't write.
+The optional fifth piece is the **`constructor`**, runs once on deployment to initialize state.
 
-The other half of debugging is version management. Midnight has six components that must stay in sync. When they're not, you get opaque runtime errors about version mismatches.
+Think of it this way:
 
----
-
-## Two Error Types
-
-### Static Errors (Compile Time)
-
-The compiler detects these before generating any output. It prints descriptive messages and terminates without producing target files.
-
-| Error type | What it is | When caught |
-|-----------|-----------|------------|
-| Syntax | Malformed code | Parser |
-| Type mismatch | Wrong type used | Type checker |
-| Undeclared disclosure | `disclose()` missing | Witness protection |
-| Undefined reference | Unknown identifier | Name resolver |
-| Generic not specialized | Generic entity used at top level | Scope checker |
-| Recursive struct | Struct that refers to itself | Declaration checker |
-| Recursive circuit | Circuit calls itself | Declaration checker |
-| `return` in `for` | `return` inside loop | Statement checker |
-| Sealed ledger write | Write to sealed field in circuit | Declaration checker |
-
-If the compiler produces no output, there's at least one static error. Check the messages.
-
-### Dynamic Errors (Runtime)
-
-These are detected by the generated JavaScript and runtime libraries when the circuit executes. They halt the current evaluation.
-
-| Error type | What it is | Example |
-|-----------|-----------|--------|
-| Type mismatch | Wrong argument type/number | Calling with wrong args |
-| Overflow | Cast value too large for target | `1000 as Uint<8>` |
-| Underflow | Counter decremented below zero | `counter -= 1` when at 0 |
-| Uninitialized nested value | Nested ledger state not initialized | `map.lookup(k).lookup(k2)` before insert |
-| Merkle tree full | Insert into full tree | `tree.insert()` when `isFull()` |
-
-Dynamic errors are harder to debug because they happen inside generated code. Read the error message for the line number in your source file.
+- `export ledger` = what everyone can read
+- `witness` = where your secrets come from
+- `export circuit` = what you can prove happened
+- `constructor` = how it starts
 
 ---
 
-## Reading Compiler Error Messages
-
-### Type Error
-
-```
-/path/contract.compact line 12 char 5:
-  type error: expected Uint<64>, got Field
-```
-
-Read: **line:character, expected type, got type**. The caret (`^`) points to the problem token.
-
-### Undeclared Disclosure
-
-```
-Exception: /path/contract.compact line 6 char 11:
-  potential witness-value disclosure must be declared but is not:
-    witness value potentially disclosed:
-      the return value of witness getBalance at line 2 char 1
-    nature of the disclosure:
-      ledger operation might disclose the witness value
-    via this path through the program:
-      the right-hand side of = at line 6 char 11
-```
-
-Read this **bottom to top**. The path traces how witness data traveled:
-
-1. **Origin:** `getBalance()` at line 2
-2. **Path:** flows through the right-hand side of the assignment
-3. **Destination:** the ledger operation at line 6
-
-**Fix:** Add `disclose()` somewhere along that path, as close to the disclosure point as possible.
-
-### Missing `disclose()` on Return
-
-```
-Exception: line 5 char 3:
-  potential witness-value disclosure must be declared but is not:
-    witness value potentially disclosed:
-      the return value of witness getBalance at line 2 char 1
-    nature of the disclosure:
-      the value returned from exported circuit check might disclose
-      the result of a comparison involving the witness value
-```
-
-Even a `Boolean` comparison result counts as disclosure. Wrap the witness call or the return value with `disclose()`.
-
-### Version Mismatch
-
-```
-Error: runtime version mismatch: expected 0.15.0, got 0.14.2
-```
-
-The compiled contract expects a different runtime version. See version management below.
-
----
-
-## The `--skip-zk` Development Loop
-
-Generating proving keys is slow. During iterative development, skip it:
-
-```bash
-compact compile --skip-zk src/contract.compact obj/contract
-```
-
-This produces `contract/index.js` and `compiler/contract-info.json`, enough to test logic. Re-enable for final builds.
-
----
-
-## Common Mistakes and Fixes
-
-### Forgot `disclose()` on Ledger Write
+## Minimal Contract
 
 ```compact
-// wrong, compiler error
-balance = getBalance();
+pragma language_version >= 0.22;
 
-// correct
-balance = disclose(getBalance());
-```
+export ledger message: Opaque<"string">;
 
-### Forgot `disclose()` on Return Value
-
-```compact
-// wrong, compiler error (comparison of witness data)
-export circuit check(n: Uint<64>): Boolean {
-  return getSecret() > n;
-}
-
-// correct, declare the disclosure
-export circuit check(n: Uint<64>): Boolean {
-  return disclose(getSecret()) > n;
+export circuit post(msg: Opaque<"string">): [] {
+  message = disclose(msg);
 }
 ```
 
-### `return` Inside `for` Loop
-
-```compact
-// wrong, static error
-circuit findFirst(v: Vector<4, Field>, target: Field): Boolean {
-  for (const x of v) {
-    if (x == target) return true;
-  }
-  return false;
-}
-
-// correct, use fold
-circuit findFirst(v: Vector<4, Field>, target: Field): Boolean {
-  return fold((found, x) => found || x == target, false, v);
-}
-```
-
-### Recursive Circuit
-
-```compact
-// wrong, static error: recursion not allowed
-circuit factorial(n: Uint<64>): Uint<64> {
-  return n == 0 ? 1 : n * factorial(n - 1);
-}
-```
-
-Rewrite using `fold` or explicit unrolling. Compact requires finite circuits.
-
-### Narrowing Cast Overflows at Runtime
-
-```compact
-const x: Uint<64> = 1000;
-const y = x as Uint<8>;  // dynamic error: 1000 doesn't fit
-```
-
-Always verify the value fits before casting. Use `assert` or bounded types.
-
-### Uninitialized Nested Ledger State
-
-```compact
-ledger fld: Map<Boolean, Map<Field, Counter>>;
-
-// wrong, dynamic error (inner map not initialized)
-export circuit increment(b: Boolean, n: Field): [] {
-  fld.lookup(b).lookup(n) += 1;
-}
-
-// correct, initialize first
-export circuit init(b: Boolean): [] {
-  fld.insert(disclose(b), default<Map<Field, Counter>>);
-}
-```
-
-### `transientHash` Result Used Without `disclose()`
-
-```compact
-// wrong, compiler error (witness-tainted)
-ledger h: Field;
-export circuit store(v: Field): [] {
-  h = transientHash<Field>(v);
-}
-
-// correct, declare disclosure
-h = disclose(transientHash<Field>(v));
-
-// or, use transientCommit (nonce provides hiding, no disclose needed)
-h = transientCommit<Field>(v, nonce);
-```
+This is a bulletin board: anyone can post a message that becomes public. No privacy, just the simplest possible contract.
 
 ---
 
-## Version Management
+## Full Contract: Bulletin Board
 
-Midnight has six components that must stay in sync:
+A contract where one person posts a message, then takes it down. Ownership is verified via a derived public key.
 
-| Component | What it is | How to check |
-|-----------|-----------|------------|
-| CLI tool | `compact` binary | `compact --version` |
-| Compiler | `compactc` | `compact compile --version` |
-| Runtime | `@midnight-ntwrk/compact-runtime` | `npm list` |
-| Ledger | `@midnight-ntwrk/ledger-v8` | `npm list` |
-| JS libraries | `@midnight-ntwrk/midnight-js-*` | `npm list` |
-| Proof server | Docker image | image tag |
+```compact
+pragma language_version >= 0.20;
 
-### Check Current Versions
+import CompactStandardLibrary;
 
-```bash
-compact --version
-compact compile --version
-npm list @midnight-ntwrk/compact-runtime
-npm list @midnight-ntwrk/ledger-v8
-```
+export enum State { VACANT, OCCUPIED }
 
-### Consult the Compatibility Matrix
+export ledger state: State;
+export ledger message: Maybe<Opaque<"string">>;
+export ledger sequence: Counter;
+export ledger owner: Bytes<32>;
 
-The [official release compatibility matrix](https://docs.midnight.network/relnotes/support-matrix) is the source of truth. Never mix versions without checking it.
+constructor() {
+  state = State.VACANT;
+  message = none<Opaque<"string">>();
+  sequence.increment(1);
+}
 
-### Lock Exact Versions in `package.json`
+witness localSecretKey(): Bytes<32>;
 
-```json
-{
-  "dependencies": {
-    "@midnight-ntwrk/compact-runtime": "0.15.0",
-    "@midnight-ntwrk/ledger-v8": "8.0.3"
-  }
+export circuit post(newMessage: Opaque<"string">): [] {
+  assert(state == State.VACANT, "Board occupied");
+  owner = disclose(publicKey(localSecretKey(), sequence as Field as Bytes<32>));
+  message = disclose(some<Opaque<"string">>(newMessage));
+  state = State.OCCUPIED;
+}
+
+export circuit takeDown(): Opaque<"string"> {
+  assert(state == State.OCCUPIED, "Board empty");
+  assert(owner == publicKey(localSecretKey(), sequence as Field as Bytes<32>), "Not owner");
+  const msg = message.value;
+  state = State.VACANT;
+  sequence.increment(1);
+  message = none<Opaque<"string">>();
+  return msg;
+}
+
+pure circuit publicKey(sk: Bytes<32>, seq: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "bboard:pk:"), seq, sk]);
 }
 ```
 
-Do not use `^` or `~`, these allow automatic updates that silently break compatibility.
+Walk through what happens:
 
-### Use `npm ci` for Reproducible Installs
+1. **Deployment:** `constructor()` runs once. State is VACANT, message is none.
+2. **Post:** Caller's derived public key is stored as `owner`. The message is disclosed and stored.
+3. **TakeDown:** Verifies the caller knows the secret key that derives the stored public key. Returns the message.
 
-```bash
-rm -rf node_modules
-npm ci
+The key pattern here: **the secret key never leaves the caller's machine**. The public key is derived and stored. When `takeDown` runs, it verifies ownership by checking if `publicKey(callerSecret, sequence) == owner`. The ZK proof proves the caller knew the secret without revealing it.
+
+---
+
+## The Four Pieces
+
+### Pragma & Import
+
+```compact
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
 ```
 
-`npm ci` installs exactly what's in `package-lock.json`. `npm install` fetches the latest matching version.
+The pragma declares minimum language version. The import brings in the standard library.
 
-### After Updating Any Component
+### Ledger (Public State)
 
-1. Update all related components together
-2. Recompile contracts
-3. Restart the proof server with the new Docker image
-4. Run your test suite
-
----
-
-## Common Environment Issues
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `compact: command not found` | Binary not on PATH | `export PATH="$HOME/.compact/bin:$PATH"` |
-| `ERR_UNSUPPORTED_DIR_IMPORT` | Node.js tried to import directory | Open new terminal, clear caches |
-| Docker connection errors | Docker Desktop not running | Start Docker Desktop |
-| Port 6300 in use | Another container on same port | `-p 6301:6300` |
-| Version mismatch at runtime | Outdated runtime package | Check compatibility matrix, update |
-
----
-
-## Version Check Script
-
-```bash
-#!/bin/bash
-echo "=== Midnight Version Check ==="
-echo "CLI:"; compact --version || echo "not found"
-echo "Compiler:"; compact compile --version || echo "not found"
-echo "Runtime:"
-npm list --depth=0 | grep @midnight-ntwrk || echo "none found"
-echo "Node.js:"; node --version
-echo "Compare with: docs.midnight.network/relnotes/support-matrix"
+```compact
+export ledger message: Opaque<"string">;
+export ledger counter: Uint<64>;
+export ledger state: State;
 ```
 
-Run this before filing a bug report.
+- `export` = readable from TypeScript (your DApp can see it)
+- `ledger` = on-chain, public state
+- Default initialization: zero or empty. Override in `constructor`.
+
+Types: `Uint<64>`, `Bytes<32>`, `Opaque<"string">`, `State`, `Counter`, `Map<K, V>`, `Set<T>`, `MerkleTree<n, T>`, and more.
+
+### Circuits (Logic)
+
+```compact
+export circuit get(): Opaque<"string"> {
+  return message;
+}
+
+export circuit post(msg: Opaque<"string">): [] {
+  message = disclose(msg);
+}
+```
+
+- `export` = callable from your DApp
+- `[]` = no return value (procedure-style)
+- `assert(condition, "message")` = runtime guard
+
+Circuits are the logic layer. They compile to ZK circuits.
+
+### Witnesses (Private Input)
+
+```compact
+witness secretKey(): Bytes<32>;
+```
+
+Declares a callback. The body is provided by your TypeScript DApp, not in Compact.
+
+### Constructor (Initialization)
+
+```compact
+constructor(initial: Uint<64>) {
+  value = disclose(initial);
+}
+```
+
+Runs once on deployment. Use `disclose()` for values that should be public from the start.
 
 ---
 
-## Getting Help
+## What Happens Under the Hood
 
-If you're stuck after checking these notes:
+When you compile:
 
-1. **Discord `#dev-chat`**, post your error message and version details
-2. **FAQ**, [docs.midnight.network/troubleshoot/faq](https://docs.midnight.network/troubleshoot/faq)
-3. **Forum**, [forum.midnight.network](https://forum.midnight.network)
+```
+Your .compact file
+        ↓
+Compiler parses → type checks → generates ZKIR
+        ↓
+ZKIR + proving keys → ZK proof (at runtime)
+        ↓
+Proof submitted → validated → state updated
+```
 
-When asking for help, always include:
-- Output of the version check script above
-- The full error message
-- The `.compact` file (or relevant excerpt)
-- What you expected vs. what happened
+Your DApp calls `contract.circuits.post(context, msg)`. Behind the scenes:
+
+1. Your DApp invokes the circuit with the message.
+2. The witness function (`localSecretKey`) is called, returns the private key.
+3. The proof server generates a ZK proof of correct execution.
+4. The proof is submitted to the chain.
+5. Validators verify the proof, they never see the secret key.
+
+---
+
+## Common Mistakes
+
+1. **Forgetting `disclose()` on ledger writes.** If you're writing a witness-derived value to the ledger, you need `disclose()`. The compiler catches this, but understanding why matters.
+
+2. **Not using `assert` on witness outputs.** Witnesses are untrusted. Always validate their outputs: `assert(balance > amount, "Insufficient balance")`.
+
+3. **Writing logic in the constructor.** The constructor runs once and is done. If you need ongoing logic, use circuits.
+
+4. **Returning witness data directly.** Returning a witness value from an exported circuit is a disclosure. Wrap it in `disclose()` or don't return it.
+
+5. **Using `export` everywhere.** `export` makes fields and circuits callable from outside. Internal helpers should not be exported.
+
+---
+
+## Comparison Layer
+
+| Concept | Solidity | TypeScript | Compact |
+|---------|---------|-----------|---------|
+| State | `uint256 publicVar` | class fields | `export ledger f: T` |
+| Functions | `function name() external` | `method()` | `export circuit name(): T` |
+| Constructor | `constructor() { }` | `constructor()` | `constructor(params) { }` |
+| Private data | `private` (convention) | `private` fields | `witness` (stays local) |
+| Initialization | in constructor | in constructor | `constructor` + `disclose()` |
 
 ---
 
 ## Quick Recap
 
-- Static errors: compiler catches them before output. Check the messages.
-- Dynamic errors: happen at runtime inside generated code. Read the line numbers.
-- Undeclared disclosure trace: read bottom to top, it traces the path from origin to disclosure.
-- Use `--skip-zk` during development. Enable for final builds.
-- Lock exact versions in `package.json`. Use `npm ci`.
-- Check the compatibility matrix before updating any component.
-- After any update: recompile, restart proof server, run tests.
+- Every contract has: `pragma`, `export ledger`, `witness`, `export circuit`.
+- Optional: `constructor` for initialization.
+- `export ledger` = public on-chain state.
+- `witness` = private input (body in TypeScript).
+- `export circuit` = logic that compiles to ZK circuits.
+- `assert()` = runtime guard. Always validate witness outputs.
+- `disclose()` = marks intentional disclosure to the public world.
 
 ---
 
 ## Cross-Links
 
-- **Previous:** [Keywords Reference](./chapter-13.md)  Keyword meanings
-- **Next:** [Security and Best Practices](./chapter-15.md)  Privacy patterns
-- **See also:** [Explicit Disclosure](./chapter-07.md)  Disclosure boundary
-- **See also:** [Circuits](./chapter-05.md)  Common circuit mistakes
-- **Examples:** [14.01 Static Errors](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/14.01.static-errors.compact)
+- **Previous:** [Setting Up the Compiler](./chapter-02.md), Toolchain setup
+- **Next:** [Ledger State](./chapter-04.md), Public vs private state model
+- **See also:** [Circuits](./chapter-05.md), How circuits work
+- **See also:** [Witnesses](./chapter-06.md), Private input mechanism

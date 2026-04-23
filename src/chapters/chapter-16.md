@@ -1,322 +1,289 @@
-# Example Projects
+# Security and Best Practices
 
-This note contains working Compact contracts with detailed explanations of what each demonstrates and why the design choices matter.
+This note covers how to keep data private in Compact contracts, the tools, the patterns, and the mistakes that break privacy.
+
+> **Docs:** [Keeping Data Private](https://docs.midnight.network/concepts/how-midnight-works/keeping-data-private) · [Basic Confidentiality](https://docs.midnight.network/compact/reference/writing#basic-confidentiality)
+> **Examples:** [15.01 Hash Auth](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact) · [15.02 Merkle Auth](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact) · [15.03 Nullifier](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact)
 
 ---
 
 ## Intuition First
 
-The best way to learn Compact is through working code. Each example here shows a specific pattern:
+On Midnight, almost everything is potentially visible:
 
-1. **NFT Contract**, Ownership transfer with commitments (the most common pattern).
-2. **Collection Contract**, Constructor parameters and parameterized contracts.
-3. **Bulletin Board**, Single-owner state machine with derived keys.
+- Every argument to a ledger operation is public.
+- Every read and write of a ledger field is public.
+- Even function calls that look internal can leak data through their arguments.
 
-Study the patterns, not just the syntax. The patterns are what you'll adapt for your own contracts.
+The exceptions are narrow: `MerkleTree` insertions don't reveal the inserted value, and `transientCommit` with a fresh nonce doesn't carry witness taint. Everything else is visible.
+
+This means privacy is not a default, it's a design discipline. You have to choose the right patterns deliberately.
 
 ---
 
-## NFT Contract
+## What's Publicly Visible
 
-> **What it demonstrates:** Ownership transfer with cryptographic commitments. The owner proves ownership without revealing their private key.
+| Operation | What it reveals |
+|-----------|----------------|
+| `ledger.insert(v)` | The value `v` |
+| `ledger.lookup(k)` | The key `k` and the returned value |
+| `set.member(f(x))` | `f(x)`, not `x` |
+| `merkleTree.insert(v)` | Does NOT reveal `v` |
+| Circuit arguments | All of them |
+| `witness` return values | Nothing (stays local) |
 
-### The Privacy Pattern
+**The rule:** If it goes through the ledger or circuit arguments, assume it's public. The burden of proof is on privacy.
 
-| What lives on-chain | What stays off-chain |
-|--------------------|--------------------|
-| `tokenCommitments` (hash of `owner + metadataHash`) | The actual `owner` and `metadataHash` |
-| `totalSupply`, `nextTokenId` | The user's secret key |
+---
 
-To transfer an NFT, you prove you know the `owner` and `metadataHash` that hash to the stored commitment, without revealing them.
+## Pattern 1: Hashes and Commitments
 
-![NFT Flow](../images/nft_flow.png)
+Store a hash or commitment instead of the value itself.
 
-### The Contract
+### When to Use Each
+
+| Tool | When to use it |
+|------|---------------|
+| `persistentHash<T>(v)` | Identity and keys stored on-chain. Value space is large enough that brute-force is infeasible. |
+| `persistentCommit<T>(v, rand)` | Sensitive values where the same value might appear multiple times (prevents correlation) or the value space is small (prevents guessing). |
+
+### Why Commitment Over Hash
+
+A bare hash of a small value space, like a vote for one of two candidates, can be brute-forced in seconds. The nonce in `persistentCommit` makes it infeasible even for small values.
 
 ```compact
-pragma language_version 0.22;
+// Bad, brute-forcible
+commitment = persistentHash<Uint<1>>(vote);
 
-import CompactStandardLibrary;
+// Good, nonce prevents brute force
+nonce = freshNonce();
+commitment = persistentCommit<Uint<1>>(vote, nonce);
+```
 
-export ledger totalSupply: Uint<64>;
-export ledger nextTokenId: Uint<64>;
-export ledger tokenCommitments: Map<Uint<64>, Bytes<32>>;
+### Nonce Reuse Is a Privacy Catastrophe
 
-witness callerAddress(): Bytes<32>;
+Two commitments with the same nonce and value are identical on-chain. If anyone knows the value, they can identify every transaction that used the same nonce.
 
-circuit hashTokenData(owner: Bytes<32>, metadataHash: Bytes<32>): Bytes<32> {
-    return persistentHash<Vector<2, Bytes<32>>>([owner, metadataHash]);
+**Rule:** Every commitment needs a fresh nonce. One safe approach: derive the nonce from a secret key and a round counter.
+
+```compact
+circuit deriveNonce(sk: Bytes<32>, round: Field): Field {
+  return transientHash<Vector<2, Bytes<32>>>(
+    [pad(32, "nonce:"), sk]
+  );
 }
+```
+
+---
+
+## Pattern 2: Hash-Based Authentication
+
+ZK proofs can emulate signatures using only hashes. Store a hash of the secret key as the "public key", circuits prove knowledge of the preimage without revealing it.
+
+```compact
+witness secretKey(): Bytes<32>;
+export ledger organizer: Bytes<32>;
+export ledger restrictedCounter: Counter;
 
 constructor() {
-    totalSupply = 0;
-    nextTokenId = 1;
+  organizer = disclose(publicKey(secretKey()));
 }
 
-export circuit mint(metadataHash: Bytes<32>): [] {
-    const caller = disclose(callerAddress());
-    const tokenId = nextTokenId;
-    const commitment = hashTokenData(caller, metadataHash);
-    tokenCommitments.insert(tokenId, disclose(commitment));
-    totalSupply = disclose((totalSupply + 1) as Uint<64>);
-    nextTokenId = disclose((tokenId + 1) as Uint<64>);
+export circuit increment(): [] {
+  assert(organizer == publicKey(secretKey()), "not authorized");
+  restrictedCounter.increment(1);
 }
 
-export circuit transfer(tokenId: Uint<64>, newOwner: Bytes<32>, tokenMetaHash: Bytes<32>): [] {
-    const caller = disclose(callerAddress());
-    const expectedCommitment = hashTokenData(caller, tokenMetaHash);
-    const pubTokenId = disclose(tokenId);
-    assert(tokenCommitments.member(pubTokenId), "Token does not exist");
-    const currentCommitment = tokenCommitments.lookup(pubTokenId);
-    assert(currentCommitment == expectedCommitment, "Not the owner");
-    const nextCommitment = hashTokenData(disclose(newOwner), tokenMetaHash);
-    tokenCommitments.insert(pubTokenId, disclose(nextCommitment));
-}
-
-export circuit verifyOwnership(tokenId: Uint<64>, tokenMetaHash: Bytes<32>): [] {
-    const caller = disclose(callerAddress());
-    const expectedCommitment = hashTokenData(caller, tokenMetaHash);
-    const pubTokenId = disclose(tokenId);
-    assert(tokenCommitments.member(pubTokenId), "Token does not exist");
-    const currentCommitment = tokenCommitments.lookup(pubTokenId);
-    assert(currentCommitment == expectedCommitment, "Not the owner");
+pure circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "some-domain-separator"), sk]
+  );
 }
 ```
 
-### Walkthrough: Mint
+This pattern:
+- Proves the caller knows the secret key.
+- Doesn't reveal the secret key.
+- Doesn't require a full signature scheme.
 
-```
-1. DApp calls mint(metadataHash)
-2. callerAddress() witness returns the caller's derived address
-3. hashTokenData(owner, metadataHash) computes the commitment
-4. tokenCommitments.insert(tokenId, commitment) stores the commitment
-5. Proof submitted: "caller knows owner that hashes to commitment"
-```
-
-The caller never reveals `owner`. They only reveal the `callerAddress` (which is public-derived from their secret key). The commitment proves they knew the private key.
-
-### Walkthrough: Transfer
-
-```
-1. DApp calls transfer(tokenId, newOwner, tokenMetaHash)
-2. callerAddress() returns the current owner's address
-3. hashTokenData(caller, tokenMetaHash) recomputes the expected commitment
-4. lookup(tokenId) gets the stored commitment
-5. assert(current == expected) verifies the caller is the owner
-6. hashTokenData(newOwner, tokenMetaHash) computes the new commitment
-7. insert(tokenId, newCommitment) updates ownership
-```
-
-The transfer proves the caller owned the NFT and authorizes the transfer to a new owner, without revealing the private keys.
-
-### Why This Pattern Works
-
-The commitment pattern is the key insight:
-
-```
-commitment = hash(owner + metadataHash)
-stored on-chain: commitment
-off-chain: owner, metadataHash
-```
-
-Even if everyone knows the `metadataHash` and sees the `commitment`, they cannot derive the `owner` without knowing the secret key.
+**Domain separator matters.** The same secret key can produce different public keys for different purposes. Never reuse a public key across different domains.
 
 ---
 
-## Collection Contract
+## Pattern 3: Merkle Trees for Anonymous Membership
 
-> **What it demonstrates:** Constructor parameters. The contract is initialized with fixed parameters (name, description, max supply) that are set at deployment.
+A `MerkleTree` proves that a value exists in a set **without revealing which value**. This is the key difference from `Set`:
 
-### The Pattern
+| Structure | What it proves | What it reveals |
+|----------|---------------|----------------|
+| `Set<Bytes<32>>` | Membership of a specific commitment | Which commitment was checked |
+| `MerkleTree<n, T>` | Membership of a value | Only that *some* value was proven |
 
 ```compact
-pragma language_version 0.22;
-
 import CompactStandardLibrary;
 
-export ledger collectionName: Bytes<32>;
-export ledger collectionDescription: Bytes<64>;
-export ledger creator: Bytes<32>;
-export ledger maxSupply: Uint<64>;
-export ledger totalSupply: Uint<64>;
-export ledger nextTokenId: Uint<64>;
-export ledger tokenCommitments: Map<Uint<64>, Bytes<32>>;
+export ledger items: MerkleTree<10, Field>;
+witness findItem(item: Field): MerkleTreePath<10, Field>;
 
-witness callerAddress(): Bytes<32>;
-
-constructor(name: Bytes<32>, desc: Bytes<64>, cap: Uint<64>) {
-    collectionName = disclose(name);
-    collectionDescription = disclose(desc);
-    maxSupply = disclose(cap);
-    creator = disclose(callerAddress());
-    totalSupply = 0;
-    nextTokenId = 1;
+export circuit insert(item: Field): [] {
+  items.insert(disclose(item));
 }
 
-export circuit mint(metadataHash: Bytes<32>): [] {
-    assert(totalSupply < maxSupply, "Supply reached");
-    const caller = disclose(callerAddress());
-    const commitment = hashTokenData(caller, metadataHash);
-    tokenCommitments.insert(nextTokenId, disclose(commitment));
-    totalSupply = disclose((totalSupply + 1) as Uint<64>));
-    nextTokenId = disclose((tokenId + 1) as Uint<64>));
-}
-// ... transfer and verifyOwnership same as NFT contract
-```
-
-### What Changes
-
-| Element | Change from NFT |
-|---------|-----------------|
-| Constructor | Takes parameters: name, desc, cap |
-| `maxSupply` | Enforces the cap in `mint` |
-| `creator` | Records who deployed the collection |
-| `collectionName/Description` | Human-readable metadata |
-
-### Constructor Parameters
-
-Constructor parameters come from the deploying transaction. They're disclosed at initialization, so the initial state is fully public.
-
-This is the right model for collections, where the metadata should be public and fixed.
-
----
-
-## Bulletin Board Contract
-
-> **What it demonstrates:** Single-owner state machine with derived public keys. The owner proves ownership by deriving the same public key from their secret.
-
-### The Pattern
-
-```compact
-pragma language_version 0.20;
-
-import CompactStandardLibrary;
-
-export enum State { VACANT, OCCUPIED }
-
-export ledger state: State;
-export ledger message: Maybe<Opaque<"string">>;
-export ledger sequence: Counter;
-export ledger owner: Bytes<32>;
-
-constructor() {
-  state = State.VACANT;
-  message = none<Opaque<"string">>();
-  sequence.increment(1);
-}
-
-witness localSecretKey(): Bytes<32>;
-
-export circuit post(newMessage: Opaque<"string">): [] {
-  assert(state == State.VACANT, "Board occupied");
-  owner = disclose(publicKey(localSecretKey(), sequence as Field as Bytes<32>));
-  message = disclose(some<Opaque<"string">>(newMessage));
-  state = State.OCCUPIED;
-}
-
-export circuit takeDown(): Opaque<"string"> {
-  assert(state == State.OCCUPIED, "Board empty");
-  assert(owner == publicKey(localSecretKey(), sequence as Field as Bytes<32>), "Not owner");
-  const msg = message.value;
-  state = State.VACANT;
-  sequence.increment(1);
-  message = none<Opaque<"string">();
-  return msg;
-}
-
-pure circuit publicKey(sk: Bytes<32>, seq: Bytes<32>): Bytes<32> {
-  return persistentHash<Vector<3, Bytes<32>>>([pad(32, "bboard:pk:"), seq, sk]);
+export circuit check(item: Field): [] {
+  const path = findItem(item);
+  assert(
+    items.checkRoot(merkleTreePathRoot<10, Field>(path)),
+    "path must be valid"
+  );
 }
 ```
 
-### Walkthrough: Post
-
-```
-1. State must be VACANT (board is empty)
-2. Derive public key from secretKey + sequence
-3. Store the public key as owner
-4. Store the message (disclosed)
-5. Set state to OCCUPIED
-```
-
-### Walkthrough: TakeDown
-
-```
-1. State must be OCCUPIED (board has a message)
-2. Derive public key from secretKey + sequence
-3. assert(derived == stored) verifies caller is the owner
-4. Return and clear the message
-5. Set state back to VACANT
-```
-
-### Why Sequence Matters
-
-The `sequence` counter is part of the public key derivation. This prevents replay attacks, the same secret key produces a different public key for each message.
-
-Without sequence, an attacker who saw the first message could derive the same public key and post as the owner.
-
----
-
-## Using in a DApp
-
-### TypeScript Setup
+The TypeScript side provides the path:
 
 ```typescript
-import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
-import { createWallet, createProviders } from './utils.js';
-
-async function mint(contractAddress: string, metadata: string) {
-  const wallet = await createWallet(seed);
-  const providers = await createProviders(wallet);
-
-  const callerAddressBytes = crypto.createHash('sha256')
-    .update(walletAddressString).digest();
-
-  const contract = await findDeployedContract(providers, {
-    contractAddress,
-    compiledContract: await getCompiledNFTContract('contract', callerAddressBytes),
-  });
-
-  const metadataHash = crypto.createHash('sha256').update(metadata).digest();
-
-  const tx = await contract.callTx.mint(metadataHash);
-  console.log(`Minted! Transaction: ${tx}`);
+function findItem(context: WitnessContext, item: bigint): MerkleTreePath<bigint> {
+  return context.ledger.items.findPathForLeaf(item)!;
 }
 ```
 
-### Key Points
+**Depth choice:** Each level adds 1 to the circuit depth. Use the minimum depth that fits your use case. 16–20 is typical.
 
-1. **`callerAddressBytes`** is derived from the wallet address, this is the witness input.
-2. **`metadataHash`** is computed from the metadata, anyone can verify this later.
-3. **`callTx.mint()`** generates the proof and submits the transaction.
-4. **`findDeployedContract()`** connects to the deployed contract on-chain.
+### When to Use HistoricMerkleTree
+
+| Tree type | When to use |
+|----------|------------|
+| `MerkleTree` | Only current root matters. Proofs must verify against today's root. |
+| `HistoricMerkleTree` | Proofs must verify against past roots. Used in nullifier patterns. |
+
+Avoid `HistoricMerkleTree` when items are frequently removed, stale proofs could be accepted after the tree has changed.
+
+### Path Performance
+
+| Method | Complexity | Requires |
+|--------|-----------|---------|
+| `pathForLeaf` | O(1) | Knowing the leaf index |
+| `findPathForLeaf` | O(n) scan | Scanning the tree |
+
+Use `pathForLeaf` when you know the index. Use `findPathForLeaf` only when you don't.
 
 ---
 
-## More Examples
+## Pattern 4: Commitment/Nullifier
 
-- [midnight-awesome-dapps](https://github.com/midnightntwrk/midnight-awesome-dapps), Official examples
-- Midnight Discord `#dev-showcase`, Community projects
+This pattern enables single-use anonymous authentication tokens, the core of Zcash and Zswap. It has four steps:
+
+```
+1. Insert a COMMITMENT (hash of secret data) into a MerkleTree
+        ↓
+2. To use the token: prove membership in the tree
+        ↓
+3. Add the NULLIFIER (different hash of the same secret) to a Set
+        ↓
+4. Assert the nullifier is NOT in the Set → prevents reuse
+        ↓
+The Set reveals SOME token was used, but NOT which one
+```
+
+The key insight: the `Set` of nullifiers is public and reveals only that *a* token was spent, not *which* one. The commitment's anonymity comes from the Merkle tree.
+
+**Critical: commitment and nullifier must use different domain separators.** If they share a domain, they could be equal for some inputs, leaking the secret.
+
+```compact
+witness findAuthPath(pk: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+witness secretKey(): Bytes<32>;
+
+export ledger authorizedCommitments: HistoricMerkleTree<10, Bytes<32>>;
+export ledger authorizedNullifiers: Set<Bytes<32>>;
+export ledger restrictedCounter: Counter;
+
+export circuit addAuthority(pk: Bytes<32>): [] {
+  authorizedCommitments.insert(disclose(pk));
+}
+
+export circuit increment(): [] {
+  const sk = secretKey();
+  const authPath = findAuthPath(publicKey(sk));
+  assert(
+    authorizedCommitments.checkRoot(merkleTreePathRoot<10, Bytes<32>>(authPath)),
+    "not authorized"
+  );
+  const nul = nullifier(sk);
+  assert(!authorizedNullifiers.member(nul), "already incremented");
+  authorizedNullifiers.insert(disclose(nul));
+  restrictedCounter.increment(1);
+}
+
+pure circuit publicKey(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "commitment-domain"), sk]
+  );
+}
+
+pure circuit nullifier(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>(
+    [pad(32, "nullifier-domain"), sk]
+  );
+}
+```
+
+### Walkthrough
+
+1. **Setup:** An authority inserts their public key into the tree.
+2. **Authenticate:** The user proves membership via the Merkle path.
+3. **Spend:** The nullifier is added to the `Set`. Next time, the `Set.member` check fails, reuse is prevented.
+4. **Anonymity:** The `Set` of nullifiers is public. Someone spent a token. No one knows which one.
+
+---
+
+## Common Mistakes
+
+1. **Using `persistentHash` for small value spaces.** A hash of a vote can be brute-forced. Always use `persistentCommit` with a fresh nonce for sensitive or small values.
+
+2. **Reusing nonces.** Every commitment with the same nonce and value is identical on-chain. Derive nonces from a secret or counter.
+
+3. **Using `Set` when you need anonymity.** `set.member(commitment)` reveals which commitment was checked. Use `MerkleTree` + `merkleTreePathRoot` when anonymity matters.
+
+4. **Same domain for commitment and nullifier.** If they share a domain, they could collide for some inputs. Always use different domain separators.
+
+5. **`transientHash` instead of `transientCommit`.** `transientHash` carries witness taint, it requires `disclose()` to store. `transientCommit` doesn't.
+
+6. **Forgetting `disclose()` on Merkle tree inserts.** Even though `MerkleTree` doesn't reveal the value, the insert itself is a ledger operation. The value must be disclosed before insertion.
+
+7. **Using `HistoricMerkleTree` unnecessarily.** It retains past roots, which costs storage and complexity. Use `MerkleTree` unless you need historical proofs.
+
+---
+
+## Privacy Tool Selection
+
+| Goal | Tool |
+|------|------|
+| Hide a value on-chain | `persistentCommit` + fresh nonce |
+| Prevent correlation of equal values | `persistentCommit` + fresh nonce |
+| Authenticate without a full signature | `persistentHash` as public key |
+| Prove set membership anonymously | `MerkleTree` + `merkleTreePathRoot` |
+| Prove membership against past state | `HistoricMerkleTree` |
+| Single-use anonymous token | Commitment/nullifier pattern |
+| Temporary computation (no ledger) | `transientCommit` (no `disclose()` needed) |
 
 ---
 
 ## Quick Recap
 
-- **NFT Contract**, Commitment pattern for ownership without revealing secrets.
-- **Collection Contract**, Constructor parameters for parameterized deployment.
-- **Bulletin Board**, Derived public keys + sequence for single-owner state machine.
-- **Constructor**, Runs once at deployment, sets initial state.
-- **Witness**, Provides private input (your secret key) without touching the chain.
-- **`disclose()`**, Marks intentional disclosure (owner address, message, etc.).
-- **`hashTokenData`**, Commits to `owner + metadataHash` without revealing either.
-- **Sequence**, Prevents replay by making each public key unique.
+- Almost everything on-chain is public. Assume ledger operations and circuit arguments are visible.
+- Use `persistentCommit` over `persistentHash` for sensitive or small values.
+- Never reuse a nonce. Derive it from a secret or counter.
+- `MerkleTree` provides anonymity. `Set` does not.
+- Commitment/nullifier requires different domain separators.
+- `transientCommit` with a fresh nonce doesn't carry witness taint, no `disclose()` needed.
+- Use `findPathForLeaf` (O(n)) only when you don't know the index. Use `pathForLeaf` (O(1)) when you do.
 
 ---
 
 ## Cross-Links
 
-- **See also:** [Writing a Contract](./chapter-03.md)  Contract structure
-- **See also:** [Ledger State](./chapter-04.md)  Commitment pattern
-- **See also:** [Witnesses](./chapter-06.md)  Private input mechanism
+- **Previous:** [Testing and Debugging](./chapter-14.md)  Version management
+- **See also:** [Ledger State](./chapter-04.md)  Commitment patterns
 - **See also:** [Explicit Disclosure](./chapter-07.md)  Disclosure boundary
-- **See also:** [Security and Best Practices](./chapter-15.md)  Privacy patterns
+- **See also:** [Standard Library](./chapter-10.md)  Hash functions
+- **See also:** [Example Projects](./chapter-16.md)  Working contracts
+- **Examples:** [15.01 Hash Auth](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.01.hash-auth.compact) · [15.02 Merkle Auth](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.02.merkle-auth.compact) · [15.03 Nullifier](https://github.com/tusharpamnani/Compact-Book/blob/main/examples/15.03.nullifier.compact)

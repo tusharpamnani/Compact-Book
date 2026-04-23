@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Circuits - Compact Book</title>
+        <title>Formatter Usage - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,229 +174,136 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="circuits"><a class="header" href="#circuits">Circuits</a></h1>
-<p>This note explains circuits, the operational unit of Compact, and why they’re fundamentally different from regular functions.</p>
+                        <h1 id="formatter-usage"><a class="header" href="#formatter-usage">Formatter Usage</a></h1>
+<p>This note covers the Compact formatter, a tool that rewrites your code to follow the canonical style guide.</p>
 <blockquote>
-<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#circuit-definitions">Circuit Definitions</a>
-<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></p>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/compilation-and-tooling/formatter-usage">Formatter Usage</a></p>
 </blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>A circuit is not a function. A function takes inputs, executes statements in sequence, and returns an output. A circuit declares constraints on inputs that must hold true.</p>
-<p>This distinction matters. When you write <code>return a + b</code>, you’re not “computing” a + b, you’re asserting that the output equals a + b. The proof proves this relationship held for the given inputs.</p>
-<p>Circuits are the language of constraints. Functions are the language of computation. Compact uses constraints because that’s what ZK proofs verify.</p>
-<hr>
-<h2 id="mental-model"><a class="header" href="#mental-model">Mental Model</a></h2>
-<p><strong>A circuit is a constraint system, not a procedure.</strong></p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Functions</th><th>Circuits</th></tr>
-</thead>
-<tbody>
-<tr><td>Execute statements in sequence</td><td>Declare relationships between inputs/outputs</td></tr>
-<tr><td>Return values</td><td>Assert equalities between expressions</td></tr>
-<tr><td>Can have side effects</td><td>No side effects (pure circuits)</td></tr>
-<tr><td>Run at runtime</td><td>Compile to gates and constraints</td></tr>
-<tr><td>Reveal inputs/outputs</td><td>Proves constraints satisfied without revealing inputs</td></tr>
-</tbody>
-</table>
-</div>
-<p>When you call a circuit from your DApp, you’re not “running” it in the traditional sense. You’re generating a proof that the declared constraints held for the actual inputs.</p>
-<hr>
-<h2 id="syntax"><a class="header" href="#syntax">Syntax</a></h2>
-<pre><code class="language-compact">export pure circuit name&lt;GenericParams&gt;(param: Type, ...): ReturnType {
-  // body
-}
-</code></pre>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Part</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>export</code></td><td>Callable from TypeScript (your DApp)</td></tr>
-<tr><td><code>pure</code></td><td>Optional. Asserts no side effects (ledger reads/writes, witness calls)</td></tr>
-<tr><td><code>circuit</code></td><td>The keyword, this is a constraint declaration</td></tr>
-<tr><td><code>GenericParams</code></td><td>Optional type parameters</td></tr>
-<tr><td><code>param: Type</code></td><td>Each parameter must have an explicit type</td></tr>
-<tr><td><code>ReturnType</code></td><td>Must be explicitly declared</td></tr>
-</tbody>
-</table>
-</div>
-<hr>
-<h2 id="simple-examples"><a class="header" href="#simple-examples">Simple Examples</a></h2>
-<pre><code class="language-compact">circuit add(a: Uint&lt;64&gt;, b: Uint&lt;64&gt;): Uint&lt;64&gt; {
-  return a + b;
-}
-
-export circuit get(): Uint&lt;64&gt; {
-  assert(state == State.SET, "Value is not set");
-  return value;
-}
-</code></pre>
-<p>The <code>assert</code> statement is itself a constraint. The circuit fails if the condition is false, the proof won’t verify.</p>
-<hr>
-<h2 id="pure-vs-impure"><a class="header" href="#pure-vs-impure">Pure vs Impure</a></h2>
-<p>A circuit is <strong>pure</strong> if it computes outputs from inputs only, no ledger reads, no ledger writes, no witness calls.</p>
-<pre><code class="language-compact">pure circuit hashPair(a: Field, b: Field): Field {
-  return transientHash&lt;[Field, Field]&gt;([a, b]);
-}
-</code></pre>
-<p>If you mark a circuit <code>pure</code> but it accidentally calls a witness, the compiler catches it. Pure circuits appear in the <code>PureCircuits</code> TypeScript type, they’re the circuits that don’t need state access.</p>
-<p><strong>Why mark pure?</strong> It documents intent and lets the compiler verify it. If you’re using a circuit in a context where ledger state shouldn’t change (like computing a hash for a commitment), <code>pure</code> ensures you didn’t accidentally depend on ledger state.</p>
-<hr>
-<h2 id="parameters-and-destructuring"><a class="header" href="#parameters-and-destructuring">Parameters and Destructuring</a></h2>
-<pre><code class="language-compact">circuit double(x: Field): Field { return x + x; }
-
-// tuple destructuring
-circuit sumPair([a, b]: [Field, Field]): Field { return a + b; }
-
-// struct destructuring
-struct Point { x: Uint&lt;32&gt;, y: Uint&lt;32&gt; }
-circuit sumPoint({x, y}: Point): Uint&lt;64&gt; { return x + y; }
-
-// rename a field
-circuit useX({x: val}: Point): Uint&lt;32&gt; { return val; }
-</code></pre>
-<p>Destructuring works at the parameter level. This is syntactic sugar, it’s the same as:</p>
-<pre><code class="language-compact">circuit sumPoint(p: Point): Uint&lt;64&gt; { return p.x + p.y; }
-</code></pre>
-<hr>
-<h2 id="return-types"><a class="header" href="#return-types">Return Types</a></h2>
-<p>Use <code>[]</code> for circuits that return nothing (they only update state):</p>
-<pre><code class="language-compact">export circuit clear(): [] {
-  state = State.UNSET;
-}
-</code></pre>
-<p><code>[]</code> means “no return value.” The circuit still produces a proof, it proves the state was updated correctly.</p>
-<hr>
-<h2 id="local-bindings"><a class="header" href="#local-bindings">Local Bindings</a></h2>
-<pre><code class="language-compact">circuit compute(x: Field): Field {
-  const doubled = x + x;
-  const result = doubled * 3;
-  return result;
-}
-
-const [a, b] = pair;
-const {x, y} = point;
-</code></pre>
-<p>Variables are immutable after binding. <code>const x = ...; x = ...;</code> is invalid. This isn’t a style choice, it’s enforced because circuits declare constraints, and reassignment would be ambiguous in a constraint system.</p>
-<hr>
-<h2 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h2>
-<pre><code class="language-compact">assert(state == State.SET, "Value is not initialized");
-
-if (condition) {
-  // then
-} else {
-  // else
-}
-</code></pre>
-<p><code>if</code>/<code>else</code> works, but there’s no early return from within a <code>for</code> body. This is because circuits need to declare all constraints, a <code>return</code> inside a loop would make the constraint structure conditional in a way the compiler can’t handle.</p>
-<hr>
-<h2 id="for-loops"><a class="header" href="#for-loops">For Loops</a></h2>
-<p>Both forms are bounded at compile time:</p>
-<pre><code class="language-compact">// iterate over vector
-for (const x of v) { }
-
-// iterate over numeric range (0..N excludes N)
-for (const i of 0..10) { }
-</code></pre>
-<p><code>return</code> cannot be used inside a <code>for</code> body. Use <code>map</code> and <code>fold</code> for accumulation.</p>
-<hr>
-<h2 id="map-and-fold"><a class="header" href="#map-and-fold">map and fold</a></h2>
-<p>For transformation and accumulation without <code>return</code>:</p>
-<pre><code class="language-compact">circuit doubleAll(v: Vector&lt;4, Field&gt;): Vector&lt;4, Field&gt; {
-  return map((x) =&gt; x + x, v);
-}
-
-circuit sumAll(v: Vector&lt;4, Field&gt;): Field {
-  return fold((acc, x) =&gt; acc + x, 0, v);
-}
-</code></pre>
-<p><code>map</code> applies a function to each element. <code>fold</code> accumulates across elements. These are idiomatic in Compact because <code>for</code> loops can’t use <code>return</code>.</p>
-<hr>
-<h2 id="generic-circuits"><a class="header" href="#generic-circuits">Generic Circuits</a></h2>
-<pre><code class="language-compact">circuit identity&lt;T&gt;(x: T): T { return x; }
-
-circuit firstOf&lt;#N, T&gt;(v: Vector&lt;N, T&gt;): T { return v[0]; }
-</code></pre>
-<p>Generic circuits must be specialized at the call site:</p>
-<pre><code class="language-compact">const x = identity&lt;Field&gt;(42);
-const head = firstOf&lt;4, Field&gt;([1, 2, 3, 4]);
-</code></pre>
-<p>Generic circuits cannot be exported from the top level, they must be specialized before export.</p>
-<hr>
-<h2 id="what-actually-happens-under-the-hood"><a class="header" href="#what-actually-happens-under-the-hood">What Actually Happens Under the Hood</a></h2>
-<p>When you compile a circuit:</p>
-<pre><code>Compact code
-        ↓
-Compiler generates constraint system (ZKIR)
-        ↓
-Constraint system → arithmetic circuit (gates + wires)
-        ↓
-At runtime: inputs + proof keys → ZK proof
-        ↓
-Proof submitted → verified → state updated
-</code></pre>
-<p>The circuit declares constraints. The proof system converts those constraints into an arithmetic circuit. The proof proves the arithmetic circuit was satisfied.</p>
-<p><strong>The key insight:</strong> The circuit doesn’t “execute” at verification time. The proof contains enough information for anyone to verify the constraints held without re-executing the computation.</p>
-<hr>
-<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
+<p>The formatter is part of the Compact toolchain. It takes your source file, applies consistent spacing, indentation, and line breaks, and writes a formatted version.</p>
+<p>Formatter is not the same as fixing errors. It makes your code readable and consistent. It doesn’t change your logic, only the whitespace.</p>
+<p>Two ways to use the formatter:</p>
 <ol>
-<li>
-<p><strong>Thinking circuits execute like functions.</strong> Circuits declare constraints. The proof proves the constraints were satisfied. “Running” a circuit means generating a proof.</p>
-</li>
-<li>
-<p><strong>Using <code>return</code> inside <code>for</code> loops.</strong> Not allowed. The circuit structure must be fully determined at compile time. Use <code>map</code> and <code>fold</code> instead.</p>
-</li>
-<li>
-<p><strong>Forgetting that variables are immutable.</strong> <code>const x = 1; x = 2;</code> is invalid. Once bound, a value cannot change. Use <code>fold</code> or multiple variables if you need accumulation.</p>
-</li>
-<li>
-<p><strong>Marking impure circuits <code>pure</code>.</strong> If a circuit reads the ledger or calls a witness, it’s impure. The compiler catches mismatches, but understanding why matters: <code>pure</code> is a promise about no side effects.</p>
-</li>
-<li>
-<p><strong>Not using <code>assert</code> on witness outputs.</strong> Witnesses are untrusted. The ZK proof proves the circuit’s logic ran correctly, it doesn’t prove the inputs were sensible. Always validate: <code>assert(balance &gt;= amount, "Insufficient")</code>.</p>
-</li>
+<li><strong><code>compact format</code></strong>, via the main CLI (recommended).</li>
+<li><strong><code>format-compact</code></strong>, directly as a standalone binary.</li>
 </ol>
 <hr>
-<h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<p>The formatter comes with the Compact toolchain. If you installed <code>compact</code>, you already have <code>format-compact</code>:</p>
+<pre><code class="language-bash">compact --version
+</code></pre>
+<hr>
+<h2 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h2>
+<h3 id="format-to-standard-output"><a class="header" href="#format-to-standard-output">Format to Standard Output</a></h3>
+<pre><code class="language-bash">format-compact contracts/contract.compact
+</code></pre>
+<p>Prints the formatted code to stdout.</p>
+<h3 id="format-to-a-file"><a class="header" href="#format-to-a-file">Format to a File</a></h3>
+<pre><code class="language-bash">format-compact contracts/contract.compact formatted/contract.compact
+</code></pre>
+<p>Writes to the specified output file.</p>
+<h3 id="format-in-place"><a class="header" href="#format-in-place">Format In-Place</a></h3>
+<pre><code class="language-bash">format-compact contracts/contract.compact contracts/contract.compact
+</code></pre>
+<p>Overwrites the original file with the formatted version.</p>
+<hr>
+<h2 id="command-line-flags"><a class="header" href="#command-line-flags">Command-Line Flags</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Concept</th><th>TypeScript functions</th><th>Rust</th><th>Solidity</th><th>Compact circuits</th></tr>
+<tr><th>Flag</th><th>What it does</th><th>Default</th></tr>
 </thead>
 <tbody>
-<tr><td>Parameters</td><td>typed</td><td>typed</td><td>typed</td><td>typed</td></tr>
-<tr><td>Return</td><td>explicit</td><td>explicit</td><td>explicit</td><td>explicit</td></tr>
-<tr><td>Side effects</td><td>allowed</td><td>ownership</td><td>storage</td><td><strong>not in pure</strong></td></tr>
-<tr><td>Recursion</td><td>allowed</td><td>allowed</td><td>allowed</td><td><strong>not allowed</strong></td></tr>
-<tr><td>Unbounded loops</td><td>allowed</td><td>allowed</td><td>gas-limited</td><td><strong>not allowed</strong></td></tr>
-<tr><td>Immutability</td><td><code>const</code></td><td><code>let</code></td><td>implicit</td><td><code>const</code></td></tr>
-<tr><td>Execution</td><td>at runtime</td><td>at runtime</td><td>at runtime</td><td>at compile (proves at runtime)</td></tr>
+<tr><td><code>--help</code></td><td>Print help text and exit</td><td>-</td></tr>
+<tr><td><code>--version</code></td><td>Print compiler version</td><td>-</td></tr>
+<tr><td><code>--language-version</code></td><td>Print language version</td><td>-</td></tr>
+<tr><td><code>--vscode</code></td><td>Single-line error messages for VS Code</td><td>-</td></tr>
+<tr><td><code>--line-length n</code></td><td>Target line length</td><td>100</td></tr>
 </tbody>
 </table>
 </div>
+<h3 id="line-length"><a class="header" href="#line-length">Line Length</a></h3>
+<pre><code class="language-bash">format-compact --line-length 80 contracts/contract.compact
+</code></pre>
+<p>Lines longer than <code>n</code> are wrapped.</p>
+<hr>
+<h2 id="via-the-compact-cli"><a class="header" href="#via-the-compact-cli">Via the Compact CLI</a></h2>
+<p>The main <code>compact</code> CLI invokes the formatter:</p>
+<pre><code class="language-bash">compact format contracts/           # format all .compact files in directory
+compact format --check contracts/    # check formatting without modifying
+</code></pre>
+<p>Use <code>--check</code> in CI pipelines to verify formatting:</p>
+<pre><code class="language-bash">compact format --check contracts/
+if [ $? -eq 0 ]; then
+  echo "Formatting OK"
+else
+  echo "Formatting issues found"
+  exit 1
+fi
+</code></pre>
+<hr>
+<h2 id="what-the-formatter-changes"><a class="header" href="#what-the-formatter-changes">What the Formatter Changes</a></h2>
+<p>The formatter applies consistent style:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Element</th><th>Before</th><th>After</th></tr>
+</thead>
+<tbody>
+<tr><td>Indentation</td><td>2 spaces</td><td>2 spaces (standard)</td></tr>
+<tr><td>Line breaks</td><td>Inconsistent</td><td>Consistent</td></tr>
+<tr><td>Trailing whitespace</td><td>Removed</td><td>Removed</td></tr>
+<tr><td>Empty lines</td><td>Inconsistent</td><td>At most one</td></tr>
+<tr><td>Array brackets</td><td><code>[x,y,z]</code></td><td><code>[x, y, z]</code></td></tr>
+<tr><td>Enum variants</td><td><code>up,down,left,right</code></td><td><code>up, down, left, right</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>The formatter doesn’t change:</p>
+<ul>
+<li>Variable names</li>
+<li>Type annotations</li>
+<li>Logic or expressions</li>
+</ul>
+<hr>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
+<p>If the source file has static errors, the formatter fails:</p>
+<pre><code class="language-bash">$ format-compact contracts/broken.compact
+Exception: /path/contracts/broken.compact line 12 char 5:
+  type error: expected Uint&lt;64&gt;, got Field
+</code></pre>
+<p>The formatter validates syntax before formatting. Fix errors first.</p>
+<hr>
+<h2 id="ci-integration"><a class="header" href="#ci-integration">CI Integration</a></h2>
+<p>Add formatting checks to your CI pipeline:</p>
+<pre><code class="language-yaml"># .github/workflows/format.yml
+name: Format Check
+on: [push, pull_request]
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compact
+        run: curl ... | sh
+      - name: Check formatting
+        run: compact format --check contracts/
+</code></pre>
 <hr>
 <h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
 <ul>
-<li>A circuit is a constraint declaration, not a procedure.</li>
-<li><code>return a + b</code> asserts output equals a + b. It doesn’t “compute” it in sequence.</li>
-<li>Pure circuits have no side effects. Impure circuits read/write ledger state.</li>
-<li>Variables are immutable after binding. No reassignment.</li>
-<li>No <code>return</code> inside <code>for</code> loops. Use <code>map</code> and <code>fold</code>.</li>
-<li>Generic circuits must be specialized at the call site.</li>
-<li>The ZK proof proves constraints were satisfied, it doesn’t reveal inputs.</li>
+<li><code>format-compact</code> rewrites whitespace without changing logic.</li>
+<li>Use <code>compact format</code> for convenient batch formatting.</li>
+<li>Use <code>--check</code> in CI to verify formatting.</li>
+<li>Fix syntax errors before formatting.</li>
+<li>The formatter ensures consistent style across your codebase.</li>
 </ul>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Previous:</strong> <a href="./chapter-04.html">Ledger State</a>  Public state model</li>
-<li><strong>Next:</strong> <a href="./chapter-06.html">Witnesses</a>  How private inputs enter circuits</li>
-<li><strong>See also:</strong> <a href="./chapter-00.html">What is Compact</a>  Compilation overview</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>  Privacy boundary</li>
-<li><strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.01.circuits.compact">05.01 Basic Circuits</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.02.generics.compact">05.02 Generics</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/05.03.control-flow.compact">05.03 Control Flow</a></li>
+<li><strong>Next:</strong> <a href="./chapter-18.html">Fixup Usage</a>  Automatic code migration</li>
+<li><strong>See also:</strong> <a href="./chapter-02.html">Setting Up the Compiler</a>  Toolchain installation</li>
 </ul>
 
                     </main>
@@ -434,6 +341,22 @@ Proof submitted → verified → state updated
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

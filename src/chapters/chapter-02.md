@@ -155,9 +155,9 @@ Re-enable for production builds.
 ## Other Commands
 
 ```bash
-compact format src/           # format all .compact files
-compact format --check src/    # check formatting (CI)
-compact fixup src/            # apply source-level fixups
+compact format contracts/           # format all .compact files
+compact format --check contracts/    # check formatting (CI)
+compact fixup contracts/            # apply source-level fixups
 compact list --installed      # list installed versions
 ```
 

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Why Compact - Compact Book</title>
+        <title>Modules and Imports - Compact Book</title>
 
 
         <!-- Custom HTML head -->
@@ -35,10 +35,10 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-d2996e2d.js";
+            window.path_to_searchindex_js = "../searchindex-81f3f3be.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-525967f2.js"></script>
+        <script src="../toc-5dc002d3.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -174,165 +174,217 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="why-compact"><a class="header" href="#why-compact">Why Compact?</a></h1>
-<p>This note explains why Compact exists, the problem it solves, why traditional approaches fail, and what design choices make it different.</p>
+                        <h1 id="modules-and-imports"><a class="header" href="#modules-and-imports">Modules and Imports</a></h1>
+<p>This note covers organizing code across files using Compact’s static module system.</p>
+<blockquote>
+<p><strong>Docs:</strong> <a href="https://docs.midnight.network/compact/reference/compact-reference#modules-exports-and-imports">Modules, Exports, and Imports</a>
+<strong>Examples:</strong> <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.01.module.compact">11.01 Module Definition</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.02.imports.compact">11.02 Imports</a> · <a href="https://github.com/tusharpamnani/Compact-Book/blob/main/examples/11.03.exports.compact">11.03 Exports</a></p>
+</blockquote>
 <hr>
 <h2 id="intuition-first"><a class="header" href="#intuition-first">Intuition First</a></h2>
-<p>Before Compact, writing privacy-preserving smart contracts required either:</p>
+<p>Compact uses a static module system, modules are defined before use, and file resolution is determined at compile time. There are no runtime imports or dynamic module loading.</p>
+<p>This is simpler than it sounds. If you’re coming from TypeScript or Rust, you already know the pattern:</p>
 <ol>
-<li><strong>Writing raw ZK circuits</strong>, Cryptographically correct but inaccessible to most developers.</li>
-<li><strong>Using traditional smart contracts</strong>, Accessible but with no privacy at all.</li>
+<li>Define a module.</li>
+<li>Export what you want to expose.</li>
+<li>Import it where you need it.</li>
+<li>The compiler resolves files at compile time.</li>
 </ol>
-<p>Compact sits between these extremes. It makes privacy-preserving computation accessible to TypeScript developers by handling the circuit generation automatically. You write code that looks familiar; the compiler produces the cryptographic machinery.</p>
-<p>The tradeoff is bounded computation. Compact intentionally cannot express Turing-complete programs. In exchange, every valid program compiles to a circuit.</p>
 <hr>
-<h2 id="the-three-approaches"><a class="header" href="#the-three-approaches">The Three Approaches</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Approach</th><th>Privacy</th><th>Accessibility</th><th>Complexity</th></tr>
-</thead>
-<tbody>
-<tr><td>Raw ZK circuits</td><td>Full</td><td>Requires cryptographic expertise</td><td>Extremely high</td></tr>
-<tr><td>Traditional smart contracts (Solidity)</td><td>None</td><td>Accessible to developers</td><td>Low</td></tr>
-<tr><td><strong>Compact</strong></td><td><strong>Full</strong></td><td><strong>TypeScript-like syntax</strong></td><td><strong>Medium</strong></td></tr>
-</tbody>
-</table>
-</div>
-<p>Compact doesn’t add privacy to existing contracts. It builds privacy into the model from the start, at the language level.</p>
+<h2 id="defining-a-module"><a class="header" href="#defining-a-module">Defining a Module</a></h2>
+<pre><code class="language-compact">module Math {
+  export circuit add(a: Field, b: Field): Field {
+    return a + b;
+  }
+
+  export circuit mul(a: Field, b: Field): Field {
+    return a * b;
+  }
+
+  circuit helper(x: Field): Field {  // not exported
+    return x + 1;
+  }
+}
+</code></pre>
+<p>Bindings inside a module are invisible outside unless explicitly exported. <code>helper</code> is private to <code>Math</code>.</p>
 <hr>
-<h2 id="the-privacy-model"><a class="header" href="#the-privacy-model">The Privacy Model</a></h2>
-<p>Traditional smart contracts have one world: public state that everyone can see. Midnight has two.</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>World</th><th>Location</th><th>Visibility</th><th>Contents</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>Public</strong></td><td>On-chain</td><td>Everyone</td><td>Proofs, contract code, public data</td></tr>
-<tr><td><strong>Private</strong></td><td>Local storage</td><td>Only the owner</td><td>Sensitive data, secrets</td></tr>
-</tbody>
-</table>
-</div>
-<p>Computations happen locally on private data. A ZK proof of correctness is submitted on-chain. Validators verify the proof without seeing the inputs.</p>
-<p><strong>The key insight:</strong> Privacy doesn’t mean “hiding everything.” It means proving you have the right to do something without revealing what that something is. A ZK proof says: “I ran this computation correctly” without revealing the inputs to that computation.</p>
+<h2 id="exporting-from-a-module"><a class="header" href="#exporting-from-a-module">Exporting from a Module</a></h2>
+<p>Two ways to export:</p>
+<pre><code class="language-compact">// Inline export
+module M {
+  export struct Point { x: Field, y: Field }
+  export circuit distance(p: Point): Field { ... }
+}
+
+// Separate export
+module M {
+  struct Point { x: Field, y: Field }
+  circuit distance(p: Point): Field { ... }
+  export { Point, distance };
+}
+</code></pre>
+<p>Both are equivalent. Inline export is more compact for small modules. Separate export is useful for controlling the public API.</p>
 <hr>
-<h2 id="why-not-just-use-traditional-contracts"><a class="header" href="#why-not-just-use-traditional-contracts">Why Not Just Use Traditional Contracts?</a></h2>
-<p>Traditional contracts make everything public by default. This is fine for many use cases, but breaks down when:</p>
+<h2 id="importing"><a class="header" href="#importing">Importing</a></h2>
+<pre><code class="language-compact">import Math;                    // everything exported by Math
+import { add } from Math;       // specific binding
+import Math prefix Math$;        // with prefix (Math$add)
+import { add as plus } from Math; // renamed
+</code></pre>
+<p>Prefix notation (<code>Math$add</code>) is useful when you have name conflicts across modules.</p>
+<hr>
+<h2 id="generic-modules"><a class="header" href="#generic-modules">Generic Modules</a></h2>
+<pre><code class="language-compact">module Container&lt;T, #N&gt; {
+  export circuit first(v: Vector&lt;N, T&gt;): T { return v[0]; }
+  export circuit last(v: Vector&lt;N, T&gt;): T { return v[N - 1]; }
+}
+
+import Container&lt;Field, 4&gt;;
+</code></pre>
+<p>Generic modules must be specialized at import time. <code>Container&lt;Field, 4&gt;</code> is a concrete module.</p>
+<hr>
+<h2 id="importing-from-files"><a class="header" href="#importing-from-files">Importing from Files</a></h2>
+<pre><code class="language-compact">import MyModule;
+// looks for MyModule.compact in the same directory
+
+import "utils/Math";
+// looks for utils/Math.compact relative to the importing file
+</code></pre>
+<p>Rules:</p>
 <ul>
-<li><strong>Regulated data</strong>, Healthcare (HIPAA), finance (SOX), identity (KYC). Public exposure isn’t optional.</li>
-<li><strong>Competitive data</strong>, Bid amounts, inventory levels, proprietary information.</li>
-<li><strong>Personal data</strong>, Balances, transaction history, credit scores.</li>
-</ul>
-<p>You could encrypt data on-chain, but then no one can verify computation on it. Traditional ZK approach is to write circuits from scratch, extremely difficult to get right and audit.</p>
-<p>Compact makes the ZK approach accessible.</p>
-<hr>
-<h2 id="type-safety-at-the-language-level"><a class="header" href="#type-safety-at-the-language-level">Type Safety at the Language Level</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Language</th><th>Type Safety</th><th>What it means</th></tr>
-</thead>
-<tbody>
-<tr><td>JavaScript</td><td>None</td><td>Any value, any type, runtime errors</td></tr>
-<tr><td>Solidity</td><td>Loosely typed</td><td>Implicit conversions, overflow allowed</td></tr>
-<tr><td>TypeScript</td><td>Optional</td><td>Opt-in with <code>tsconfig</code>, can be bypassed</td></tr>
-<tr><td><strong>Compact</strong></td><td><strong>Strong, enforced</strong></td><td><strong>Compiler rejects any program that doesn’t type-check</strong></td></tr>
-</tbody>
-</table>
-</div>
-<p>Strong type safety matters in Compact because the type system tracks data flow for privacy enforcement. If types were loose, the compiler couldn’t track where private data travels.</p>
-<hr>
-<h2 id="verifiability-vs-privacy"><a class="header" href="#verifiability-vs-privacy">Verifiability vs. Privacy</a></h2>
-<p>| You want | Traditional contracts | Raw ZK circuits | Compact |
-|———|—————––|—————–|—————|––––|
-| Everything verifiable | Yes | Yes | Yes |
-| Full privacy | <strong>No</strong> | Yes | Yes |
-| Accessible syntax | Yes | <strong>No</strong> | Yes |</p>
-<p>Compact gives you both verifiability and privacy without requiring cryptographic expertise. You don’t write a single circuit by hand.</p>
-<hr>
-<h2 id="selective-disclosure"><a class="header" href="#selective-disclosure">Selective Disclosure</a></h2>
-<p>Compact supports selective disclosure, users choose exactly what to reveal and to whom. This enables regulated use cases:</p>
-<ul>
-<li><strong>Healthcare:</strong> Prove you meet age requirements without revealing your birthday.</li>
-<li><strong>Finance:</strong> Prove your balance exceeds a threshold without revealing the balance.</li>
-<li><strong>Identity:</strong> Prove citizenship without revealing your nationality or full address.</li>
-</ul>
-<p>This isn’t a feature bolted on. It’s baked into the model via <code>disclose()</code>, a compile-time boundary that marks intentional disclosure.</p>
-<hr>
-<h2 id="when-to-choose-compact"><a class="header" href="#when-to-choose-compact">When to Choose Compact</a></h2>
-<p>Use Compact when you need:</p>
-<ul>
-<li>Privacy-preserving logic on a public blockchain</li>
-<li>To prove correctness without revealing inputs</li>
-<li>TypeScript-like development without learning ZK circuit design</li>
-<li>Selective disclosure for regulated data</li>
+<li>File must contain exactly one module definition.</li>
+<li>If not found, it’s a compile error.</li>
+<li>Search path is set via <code>--compact-path</code> or <code>COMPACT_PATH</code>.</li>
 </ul>
 <hr>
-<h2 id="when-not-to-choose-compact"><a class="header" href="#when-not-to-choose-compact">When Not to Choose Compact</a></h2>
-<p>Compact is not the right tool when:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Scenario</th><th>Why not Compact</th><th>Alternative</th></tr>
-</thead>
-<tbody>
-<tr><td>No privacy requirements</td><td>Traditional contracts are simpler</td><td>Solidity</td></tr>
-<tr><td>Turing-complete computation needed</td><td>Compact is intentionally bounded</td><td>Raw circuits</td></tr>
-<tr><td>Dynamically-sized data structures</td><td>All sizes must be compile-time constants</td><td>Design around bounded structures</td></tr>
-<tr><td>Complex cryptography needed</td><td>Compact generates standard circuits</td><td>Write custom circuits</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="include-files"><a class="header" href="#include-files">Include Files</a></h2>
+<p><code>include</code> splices contents directly into the current file:</p>
+<pre><code class="language-compact">include "shared/types.compact";
+</code></pre>
+<p>Unlike <code>import</code>, <code>include</code> is text substitution, the included contents become part of the file. Use for sharing type definitions, enums, and constants.</p>
 <hr>
-<h2 id="the-core-tradeoff"><a class="header" href="#the-core-tradeoff">The Core Tradeoff</a></h2>
-<p>Compact trades:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>What you give up</th><th>What you get</th></tr>
-</thead>
-<tbody>
-<tr><td>Turing-completeness</td><td>Automatic ZK circuit compilation</td></tr>
-<tr><td>Dynamic typing</td><td>Strong type safety enforced at compile time</td></tr>
-<tr><td>Implicit privacy</td><td>Privacy model that works at the language level</td></tr>
-</tbody>
-</table>
-</div>
-<p>This tradeoff is explicit and intentional. If you need full Turing-completeness, you don’t need Compact. But if you need privacy-preserving smart contracts and don’t want to write circuits by hand, Compact is purpose-built for exactly this.</p>
+<h2 id="top-level-exports"><a class="header" href="#top-level-exports">Top-Level Exports</a></h2>
+<pre><code class="language-compact">export circuit transfer(to: Bytes&lt;32&gt;, amount: Uint&lt;64&gt;): [] { ... }
+export struct TokenInfo { name: Bytes&lt;32&gt;, supply: Uint&lt;64&gt; }
+export ledger totalSupply: Uint&lt;64&gt;;
+</code></pre>
+<p>Top-level exports are the contract’s public API. They’re callable from TypeScript.</p>
+<p>Rules:</p>
+<ul>
+<li>No two exported circuits can share the same name.</li>
+<li>Generic circuits cannot be exported, they must be specialized first.</li>
+</ul>
+<hr>
+<h2 id="module-order"><a class="header" href="#module-order">Module Order</a></h2>
+<p><strong>Important:</strong> A module must be <strong>defined before</strong> any import of that module.</p>
+<pre><code class="language-compact">// INCORRECT
+import State;  // error: State not yet defined
+module State { ... }
+
+// CORRECT
+module State { ... }
+import State;
+</code></pre>
+<p>This is a compile-time requirement, not a style choice. Circular dependencies are not allowed.</p>
+<hr>
+<h2 id="practical-example"><a class="header" href="#practical-example">Practical Example</a></h2>
+<p><strong><code>state.compact</code></strong></p>
+<pre><code class="language-compact">module State {
+  enum STATUS { UNSET, SET }
+  ledger status: STATUS;
+  ledger value: Field;
+
+  export circuit init(v: Field): [] {
+    value = disclose(v);
+    status = STATUS.SET;
+  }
+
+  export circuit get(): Field {
+    assert(status == STATUS.SET, "Not initialized");
+    return value;
+  }
+}
+</code></pre>
+<p><strong><code>main.compact</code></strong></p>
+<pre><code class="language-compact">pragma language_version 0.22;
+import CompactStandardLibrary;
+import State;
+
+constructor(v: Field) {
+  init(v);
+}
+
+export circuit getValue(): Field {
+  return State.get();
+}
+</code></pre>
+<p><code>main.compact</code> defines no state itself, it just imports and re-exports <code>State</code>. This separation of concerns keeps contracts organized.</p>
+<hr>
+<h2 id="common-mistakes"><a class="header" href="#common-mistakes">Common Mistakes</a></h2>
+<ol>
+<li>
+<p><strong>Importing before defining.</strong> The compiler requires module definitions to come before imports. Move the <code>module</code> block above the <code>import</code> statement.</p>
+</li>
+<li>
+<p><strong>Assuming <code>include</code> works like <code>import</code>.</strong> <code>include</code> is text substitution. <code>import</code> is a reference. Use <code>include</code> for types, <code>import</code> for modules.</p>
+</li>
+<li>
+<p><strong>Exporting generic circuits directly.</strong> Generic circuits must be specialized before export. Move specialization to a non-exported circuit.</p>
+</li>
+<li>
+<p><strong>Forgetting the search path.</strong> If <code>import "utils/Math"</code> fails, the compiler can’t find the file. Set <code>COMPACT_PATH</code> or use <code>--compact-path</code>.</p>
+</li>
+<li>
+<p><strong>Name conflicts across modules.</strong> Use <code>prefix</code> notation (<code>Math$add</code>) or explicit renaming (<code>import { add as plus } from Math</code>) to avoid conflicts.</p>
+</li>
+</ol>
 <hr>
 <h2 id="comparison-layer"><a class="header" href="#comparison-layer">Comparison Layer</a></h2>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Feature</th><th>Solidity</th><th>Raw ZK (Circom)</th><th>Compact</th></tr>
+<tr><th>Concept</th><th>TypeScript</th><th>Rust</th><th>Compact</th></tr>
 </thead>
 <tbody>
-<tr><td>Language</td><td>Solidity</td><td>Circom/DSL</td><td>TypeScript-like</td></tr>
-<tr><td>Privacy model</td><td>None</td><td>Full</td><td>Full</td></tr>
-<tr><td>Type safety</td><td>Loose</td><td>Manual</td><td>Enforced</td></tr>
-<tr><td>Learning curve</td><td>Low</td><td>Very high</td><td>Medium</td></tr>
-<tr><td>Compilation</td><td>EVM bytecode</td><td>Circuit</td><td>ZK circuits + TS</td></tr>
-<tr><td>State model</td><td>On-chain only</td><td>Custom</td><td>Public + private</td></tr>
+<tr><td>Namespace</td><td>module, import</td><td>mod, use</td><td>module, import</td></tr>
+<tr><td>Visibility</td><td><code>export</code></td><td><code>pub</code></td><td><code>export</code></td></tr>
+<tr><td>Private</td><td>default</td><td>default</td><td>default</td></tr>
+<tr><td>Circular deps</td><td>runtime error</td><td>compile error</td><td>compile error</td></tr>
+<tr><td>Generic modules</td><td><code>module&lt;T&gt;</code></td><td><code>mod&lt;T&gt;</code></td><td><code>module&lt;T, #N&gt;</code></td></tr>
+<tr><td>Text inclusion</td><td>N/A</td><td>N/A</td><td><code>include</code></td></tr>
 </tbody>
 </table>
 </div>
 <hr>
-<h2 id="quick-recap"><a class="header" href="#quick-recap">Quick Recap</a></h2>
-<ul>
-<li>Compact bridges the gap between inaccessible raw ZK and privacy-free traditional contracts.</li>
-<li>Midnight has two worlds: public (on-chain) and private (local). Only the proof goes on-chain.</li>
-<li>Selective disclosure lets users reveal exactly what they choose, to whom they choose.</li>
-<li>Compact trades Turing-completeness for automatic ZK circuit generation and strong type safety.</li>
-<li>If you don’t need privacy, traditional contracts are simpler. If you need full control, raw circuits exist.</li>
-<li>The type system is strict by design, it tracks data flow for privacy enforcement.</li>
-</ul>
+<h2 id="quick-reference"><a class="header" href="#quick-reference">Quick Reference</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Syntax</th><th>Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>module M { ... }</code></td><td>Define module <code>M</code></td></tr>
+<tr><td><code>export circuit f(...)</code></td><td>Export from module or top-level</td></tr>
+<tr><td><code>export { f, g }</code></td><td>Export multiple bindings</td></tr>
+<tr><td><code>import M</code></td><td>Import all exports of <code>M</code></td></tr>
+<tr><td><code>import { f } from M</code></td><td>Import specific binding</td></tr>
+<tr><td><code>import M prefix P$</code></td><td>Import with prefix</td></tr>
+<tr><td><code>import { f as g } from M</code></td><td>Rename on import</td></tr>
+<tr><td><code>import M&lt;T, 4&gt;</code></td><td>Generic module specialization</td></tr>
+<tr><td><code>import "path/M"</code></td><td>Import from file path</td></tr>
+<tr><td><code>include "file.compact"</code></td><td>Splice file inline</td></tr>
+<tr><td><code>import CompactStandardLibrary</code></td><td>Built-in stdlib</td></tr>
+</tbody>
+</table>
+</div>
 <hr>
 <h2 id="cross-links"><a class="header" href="#cross-links">Cross-Links</a></h2>
 <ul>
-<li><strong>Next:</strong> <a href="./chapter-02.html">Setting Up the Compiler</a>, Install the toolchain</li>
-<li><strong>See also:</strong> <a href="./chapter-04.html">Ledger State</a>, How the two-world model works</li>
-<li><strong>See also:</strong> <a href="./chapter-07.html">Explicit Disclosure</a>, How selective disclosure works</li>
+<li><strong>Previous:</strong> <a href="./chapter-10.html">Standard Library</a>  Built-in utilities</li>
+<li><strong>Next:</strong> <a href="./chapter-12.html">Compact Grammar</a>  Syntax rules</li>
+<li><strong>See also:</strong> <a href="./chapter-03.html">Writing a Contract</a>  Contract structure</li>
+<li><strong>See also:</strong> <a href="./chapter-08.html">Data Types</a>  Type definitions</li>
+<li><strong>Examples:</strong> <a href="../examples/11.01.module.compact">11.01 Module</a> · <a href="../examples/11.02.imports.compact">11.02 Imports</a> · <a href="../examples/11.03.exports.compact">11.03 Exports</a></li>
 </ul>
 
                     </main>
@@ -370,6 +422,22 @@
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>
