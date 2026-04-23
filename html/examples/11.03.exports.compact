@@ -1,0 +1,32 @@
+// 11.03  Separate Exports
+// Demonstrates: inline vs separate export syntax
+// Source: see 11. Modules and Imports.md
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+module Utils {
+  // Inline exports
+  export struct Config {
+    enabled: Boolean,
+    threshold: Uint<64>,
+  }
+
+  pure circuit isReady(c: Config): Boolean {
+    return c.enabled && c.threshold > 0;
+  }
+}
+
+module State {
+  struct Point { x: Field, y: Field }
+
+  pure circuit distance(p: Point): Field {
+    return p.x + p.y;
+  }
+
+  pure circuit scale(p: Point, s: Field): Point {
+    return Point { x: p.x * s, y: p.y * s };
+  }
+
+  // Separate export
+  export { Point, distance, scale };
+}

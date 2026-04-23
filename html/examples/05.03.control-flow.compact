@@ -1,0 +1,59 @@
+pragma language_version >= 0.22;
+import CompactStandardLibrary;
+
+export ledger status: Uint<8>;
+export ledger count: Uint<64>;
+
+enum State { UNSET, SET, LOCKED }
+
+pure circuit classify(n: Field): Uint<8> {
+  if (n == 0) {
+    return 0;
+  } else {
+    if (n < 10) {
+      return 1;
+    } else {
+      if (n < 100) {
+        return 2;
+      } else {
+        return 3;
+      }
+    }
+  }
+}
+
+pure circuit sumRange(start: Field, end: Field): Field {
+  // for loops can't use return  accumulate with fold instead
+  return fold(
+    (acc, i) => acc + i,
+    0,
+    [start, start + 1, start + 2, start + 3, start + 4, start + 5]
+  );
+}
+
+pure circuit findMax(v: Vector<5, Field>): Field {
+  return fold(
+    (max, x) => x > max ? x : max,
+    v[0],
+    v
+  );
+}
+
+pure circuit countMatches(
+  v: Vector<5, Field>,
+  target: Field
+): Uint<8> {
+  return fold(
+    (acc, x) => acc + (x == target ? 1 : 0),
+    0,
+    v
+  );
+}
+
+export circuit process(values: Vector<5, Field>): [] {
+  const c = classify(42);
+  const s = sumRange(1, 7);  // 1+2+3+4+5+6
+  const m = findMax(values);
+  status = c;
+  count = disclose(s as Uint<64>);
+}
